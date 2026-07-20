@@ -33,21 +33,31 @@ jobs:
           echo "base_ref=$(jq -r '.base_ref' pr_context/pr-context.json)" >> $GITHUB_OUTPUT
           echo "run_id=$(jq -r '.run_id' pr_context/pr-context.json)" >> $GITHUB_OUTPUT
 
+      # Step outputs derive from the fork PR and are user-controlled. Pass them
+      # through env vars and read via process.env so they are never interpolated
+      # into the script source (a value containing a quote could inject code).
       - name: Dispatch Sonar workflow with inputs
         uses: actions/github-script@v8
+        env:
+          PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.ctx.outputs.head_sha }}
+          HEAD_REPO: ${{ steps.ctx.outputs.head_repo }}
+          HEAD_BRANCH: ${{ steps.ctx.outputs.head_branch }}
+          BASE_REF: ${{ steps.ctx.outputs.base_ref }}
+          RUN_ID: ${{ steps.ctx.outputs.run_id }}
         with:
           script: |
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
               workflow_id: 'sonar.yml',
-              ref: '${{ steps.ctx.outputs.base_ref }}',
+              ref: process.env.BASE_REF,
               inputs: {
-                pr_number:  '${{ steps.ctx.outputs.pr_number }}',
-                head_sha:   '${{ steps.ctx.outputs.head_sha }}',
-                head_repo:  '${{ steps.ctx.outputs.head_repo }}',
-                head_branch:'${{ steps.ctx.outputs.head_branch }}',
-                base_ref:   '${{ steps.ctx.outputs.base_ref }}',
-                run_id:     '${{ steps.ctx.outputs.run_id }}'
+                pr_number:   process.env.PR_NUMBER,
+                head_sha:    process.env.HEAD_SHA,
+                head_repo:   process.env.HEAD_REPO,
+                head_branch: process.env.HEAD_BRANCH,
+                base_ref:    process.env.BASE_REF,
+                run_id:      process.env.RUN_ID
               }
             });
