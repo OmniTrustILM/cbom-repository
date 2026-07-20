@@ -26,14 +26,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Workflow inputs originate from a fork PR and are user-controlled.
+      # Pass them via env vars so the shell treats them as data, never as
+      # interpolated code, when writing to $GITHUB_ENV.
       - name: Export context
+        env:
+          PR_NUMBER: ${{ inputs.pr_number }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          HEAD_REPO: ${{ inputs.head_repo }}
+          PR_BRANCH: ${{ inputs.head_branch }}
+          BASE_BRANCH: ${{ inputs.base_ref }}
+          UPSTREAM_RUN_ID: ${{ inputs.run_id }}
         run: |
-          echo "PR_NUMBER=${{ inputs.pr_number }}"    >> $GITHUB_ENV
-          echo "HEAD_SHA=${{ inputs.head_sha }}"      >> $GITHUB_ENV
-          echo "HEAD_REPO=${{ inputs.head_repo }}"    >> $GITHUB_ENV
-          echo "PR_BRANCH=${{ inputs.head_branch }}"  >> $GITHUB_ENV
-          echo "BASE_BRANCH=${{ inputs.base_ref }}"   >> $GITHUB_ENV
-          echo "UPSTREAM_RUN_ID=${{ inputs.run_id }}" >> $GITHUB_ENV
+          {
+            echo "PR_NUMBER=$PR_NUMBER"
+            echo "HEAD_SHA=$HEAD_SHA"
+            echo "HEAD_REPO=$HEAD_REPO"
+            echo "PR_BRANCH=$PR_BRANCH"
+            echo "BASE_BRANCH=$BASE_BRANCH"
+            echo "UPSTREAM_RUN_ID=$UPSTREAM_RUN_ID"
+          } >> "$GITHUB_ENV"
 
       - name: Generate token
         id: app_token
