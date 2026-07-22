@@ -29,6 +29,9 @@ type Config struct {
 	Prefix string `envconfig:"APP_HTTP_PREFIX" default:"/api"`
 	// default HTTP request body size is 20 MiB
 	MaxBodySize int64 `envconfig:"APP_HTTP_MAX_BODY_SIZE" default:"20971520"`
+	// DefaultBOMVersion is the CycloneDX version assumed when an upload's
+	// Content-Type omits the `version` media-type parameter.
+	DefaultBOMVersion string `envconfig:"APP_DEFAULT_BOM_VERSION" default:"1.6"`
 }
 
 type Server struct {

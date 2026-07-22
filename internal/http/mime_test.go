@@ -9,9 +9,10 @@ import (
 
 func TestUploadInputChecks(t *testing.T) {
 	testCases := map[string]struct {
-		input   string
-		wantErr bool
-		version string
+		input          string
+		wantErr        bool
+		version        string
+		defaultVersion string
 	}{
 		"empty": {
 			input:   "",
@@ -21,15 +22,23 @@ func TestUploadInputChecks(t *testing.T) {
 			input:   "application/json, text/plain",
 			wantErr: true,
 		},
-		"missing version": {
-			input:   "application/vnd.cyclonedx+json",
-			wantErr: false,
-			version: "1.6",
+		"missing version defaults to 1.6": {
+			input:          "application/vnd.cyclonedx+json",
+			wantErr:        false,
+			version:        "1.6",
+			defaultVersion: "1.6",
+		},
+		"missing version honours configured default 1.7": {
+			input:          "application/vnd.cyclonedx+json",
+			wantErr:        false,
+			version:        "1.7",
+			defaultVersion: "1.7",
 		},
 		"expected content type": {
-			input:   "application/vnd.cyclonedx+json; Version = 1.4",
-			wantErr: false,
-			version: "1.4",
+			input:          "application/vnd.cyclonedx+json; Version = 1.4",
+			wantErr:        false,
+			version:        "1.4",
+			defaultVersion: "1.6",
 		},
 		"unexpected-1": {
 			input:   "application/json",
@@ -39,7 +48,7 @@ func TestUploadInputChecks(t *testing.T) {
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			ok, version := internalHttp.CheckContentType(tc.input)
+			ok, version := internalHttp.CheckContentType(tc.input, tc.defaultVersion)
 			if tc.wantErr {
 				require.False(t, ok)
 			} else {

@@ -5,12 +5,12 @@ import (
 	"strings"
 )
 
-const defaultBOMVersion = "1.6"
-
 // HeaderContentType is the canonical key used when reading the request header for content type.
 const HeaderContentType = "content-type"
 
-func CheckContentType(contentType string) (bool, string) {
+// CheckContentType validates the media type and returns the requested CycloneDX
+// version. When the `version` media-type parameter is absent, defaultVersion is used.
+func CheckContentType(contentType, defaultVersion string) (bool, string) {
 	if strings.TrimSpace(contentType) == "" {
 		return false, ""
 	}
@@ -24,7 +24,7 @@ func CheckContentType(contentType string) (bool, string) {
 	}
 	version, ok := p["version"]
 	if !ok {
-		version = defaultBOMVersion
+		version = defaultVersion
 	}
 
 	return true, version

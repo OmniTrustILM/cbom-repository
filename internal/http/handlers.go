@@ -17,7 +17,7 @@ import (
 func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// Assert content type and optional version
-	ok, version := CheckContentType(r.Header.Get(HeaderContentType))
+	ok, version := CheckContentType(r.Header.Get(HeaderContentType), h.cfg.DefaultBOMVersion)
 	if !ok {
 		unsupportedMediaType(w,
 			fmt.Sprintf("Content type value '%s' not allowed for path '%s' and method '%s'. Supported content types: %s",
