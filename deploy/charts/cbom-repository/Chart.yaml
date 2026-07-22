@@ -4,7 +4,7 @@ apiVersion: v2
 appVersion: 1.0.0
 name: cbom-repository
 description: A Helm chart for CBOM Repository.
-home: https://github.com/CZERTAINLY/CBOM-Repository
+home: https://github.com/OmniTrustILM/cbom-repository
 icon: https://github.com/CZERTAINLY/CZERTAINLY/blob/master/czertainly-logo/czertainly_sign_color.svg
 dependencies:
   - name: czertainly-lib

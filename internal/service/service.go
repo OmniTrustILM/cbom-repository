@@ -87,23 +87,25 @@ type Service struct {
 //   - error: Non-nil if any schema file cannot be read or compiled, nil otherwise
 func New(store store.Store, config Config) (Service, error) {
 
+	// Use a single compiler for all versions: the vendored sub-schemas are large
+	// (spdx.schema.json in particular), so compile and register them once under
+	// their `$id`, then resolve every bom schema's external `$ref`s from that
+	// cache — instead of re-compiling the sub-schemas per version, or letting the
+	// compiler fetch them over the network (see subSchemaFiles). The bom schemas
+	// have distinct `$id`s, so sharing the compiler does not conflate versions.
+	compiler := jss.NewCompiler()
+	for _, sub := range subSchemaFiles {
+		sb, err := schemas.ReadFile(sub)
+		if err != nil {
+			return Service{}, fmt.Errorf("failed to read embedded sub-schema %s: %w", sub, err)
+		}
+		if _, err := compiler.Compile(sb); err != nil {
+			return Service{}, fmt.Errorf("failed to compile embedded sub-schema %s: %w", sub, err)
+		}
+	}
+
 	jsonSchemas := make(map[string]*jss.Schema)
 	for version, filename := range versionToEmbeddedFileMapping {
-		compiler := jss.NewCompiler()
-
-		// Pre-register the vendored sub-schemas under their `$id` so the
-		// bom schema's external `$ref`s resolve locally instead of being
-		// fetched over the network (see subSchemaFiles).
-		for _, sub := range subSchemaFiles {
-			sb, err := schemas.ReadFile(sub)
-			if err != nil {
-				return Service{}, fmt.Errorf("failed to read embedded sub-schema %s: %w", sub, err)
-			}
-			if _, err := compiler.Compile(sb); err != nil {
-				return Service{}, fmt.Errorf("failed to compile sub-schema %s: %w", sub, err)
-			}
-		}
-
 		b, err := schemas.ReadFile(filename)
 		if err != nil {
 			return Service{}, fmt.Errorf("failed to read embedded file %s: %w", filename, err)
@@ -111,7 +113,7 @@ func New(store store.Store, config Config) (Service, error) {
 
 		schema, err := compiler.Compile(b)
 		if err != nil {
-			return Service{}, fmt.Errorf("failed to compile schema: %w", err)
+			return Service{}, fmt.Errorf("failed to compile schema %s (version %s): %w", filename, version, err)
 		}
 
 		// Fail closed: any still-unresolved external reference would make
@@ -120,7 +122,7 @@ func New(store store.Store, config Config) (Service, error) {
 		// against an incomplete schema — this typically means a referenced
 		// sub-schema is missing from subSchemaFiles.
 		if unresolved := schema.UnresolvedReferenceURIs(); len(unresolved) > 0 {
-			return Service{}, fmt.Errorf("schema %s has unresolved references (missing vendored sub-schema?): %v", filename, unresolved)
+			return Service{}, fmt.Errorf("schema %s (version %s) has unresolved references (missing vendored sub-schema?): %v", filename, version, unresolved)
 		}
 
 		jsonSchemas[version] = schema

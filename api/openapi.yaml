@@ -59,7 +59,9 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '415':
-          description: Unsupported media type (wrong base media type; not `application/vnd.cyclonedx+json`)
+          description: >-
+            Unsupported media type: the `Content-Type` is missing/blank, cannot be
+            parsed, or its base type is not `application/vnd.cyclonedx+json`.
           content:
             application/problem+json:
               schema:

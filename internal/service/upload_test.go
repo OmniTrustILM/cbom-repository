@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -180,7 +181,7 @@ func minimalBOMJSON(withSerial bool, serial string, version int, extra bool) str
 
 func minimalBOMJSONVersion(specVersion string, withSerial bool, serial string, version int) string {
 	if withSerial && version > 0 {
-		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"" + specVersion + "\",\n  \"serialNumber\": \"" + serial + "\",\n  \"version\": " + string(rune('0'+version)) + "\n}"
+		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"" + specVersion + "\",\n  \"serialNumber\": \"" + serial + "\",\n  \"version\": " + strconv.Itoa(version) + "\n}"
 	}
 	if withSerial {
 		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"" + specVersion + "\",\n  \"serialNumber\": \"" + serial + "\"\n}"
