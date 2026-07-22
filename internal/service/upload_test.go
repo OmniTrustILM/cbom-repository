@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -373,3 +374,31 @@ func TestSupportedVersionAndVersionSupported(t *testing.T) {
 
 // helper to create *string for aws types
 func awsString(s string) *string { return &s }
+
+func TestCycloneDX17_ReEncodePreserves17Fields(t *testing.T) {
+	// A 1.7 crypto-asset carrying a 1.7-only field (algorithmFamily).
+	input := `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.7",
+  "components": [
+    {
+      "type": "cryptographic-asset",
+      "name": "example-alg",
+      "cryptoProperties": {
+        "assetType": "algorithm",
+        "algorithmProperties": { "algorithmFamily": "rsa" }
+      }
+    }
+  ]
+}`
+
+	var bom cdx.BOM
+	require.NoError(t, cdx.NewBOMDecoder(strings.NewReader(input), cdx.BOMFileFormatJSON).Decode(&bom))
+
+	var out bytes.Buffer
+	require.NoError(t, cdx.NewBOMEncoder(&out, cdx.BOMFileFormatJSON).Encode(&bom))
+
+	// The 1.7-only field must survive the decode -> encode round-trip used by the upload path.
+	require.Contains(t, out.String(), "algorithmFamily")
+	require.Contains(t, out.String(), "rsa")
+}
