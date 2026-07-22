@@ -72,9 +72,10 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 
 	jsonSchema, ok := s.jsonSchemas[schemaVersion]
 	if !ok {
-		// this shouldn't happen, if http handler correctly checks against `VersionSupported()`
+		// Reachable only via a direct service call (the HTTP layer gates on VersionSupported).
+		// Treat as a validation error so it maps to 400, not 500.
 		slog.ErrorContext(ctx, "Missing schema validator!!!", slog.String("version", schemaVersion))
-		return BOMCreated{}, fmt.Errorf("schema validator missing for version %s", schemaVersion)
+		return BOMCreated{}, fmt.Errorf("%w: no schema validator for version %s", ErrValidation, schemaVersion)
 	}
 
 	res := jsonSchema.Validate(buf.Bytes())
@@ -276,6 +277,8 @@ func knownCdxVersion(v string) (cdx.SpecVersion, error) {
 		return cdx.SpecVersion1_5, nil
 	case "1.6":
 		return cdx.SpecVersion1_6, nil
+	case "1.7":
+		return cdx.SpecVersion1_7, nil
 	default:
 		return -1, fmt.Errorf("unknown cyclonedx bom version %s", v)
 	}

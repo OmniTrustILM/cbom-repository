@@ -341,6 +341,10 @@ func TestKnownCdxVersion(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, cdx.SpecVersion1_6, v)
 
+	v, err = knownCdxVersion("1.7")
+	require.NoError(t, err)
+	require.Equal(t, cdx.SpecVersion1_7, v)
+
 	// unknown version
 	_, err = knownCdxVersion("9.9")
 	require.Error(t, err)
@@ -414,4 +418,22 @@ func TestCycloneDX17_ReEncodePreserves17Fields(t *testing.T) {
 	require.NotNil(t, cp)
 	require.NotNil(t, cp.AlgorithmProperties)
 	require.Equal(t, "ECDH", cp.AlgorithmProperties.AlgorithmFamily)
+}
+
+func TestUploadBOM_MissingValidatorIsValidationError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st, Config{CheckOnFetch: false})
+	require.NoError(t, err)
+
+	// "1.5" is known to knownCdxVersion but has no compiled schema (only 1.6/1.7 registered).
+	// A body honestly declaring specVersion 1.5 must yield ErrValidation (400), never a bare 500-class error.
+	rc := io.NopCloser(strings.NewReader("{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.5\"\n}"))
+	_, err = svc.UploadBOM(context.Background(), rc, "1.5")
+	require.ErrorIs(t, err, ErrValidation)
 }
