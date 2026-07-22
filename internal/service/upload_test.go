@@ -536,3 +536,47 @@ func TestUploadBOM_1_7_InvalidSchema(t *testing.T) {
 	_, err = svc.UploadBOM(context.Background(), rc, "1.7")
 	require.ErrorIs(t, err, ErrValidation)
 }
+
+// TestSchemasSelfContained asserts that every embedded bom-*.schema.json resolves
+// all of its external `$ref`s from the vendored sub-schemas alone, leaving nothing
+// to be fetched over the network. This is network-independent: if a vendored
+// sub-schema is removed or a new external reference is introduced, the guarantee
+// breaks here (fail closed) instead of silently degrading validation to fail-open
+// at runtime when the network is unavailable.
+func TestSchemasSelfContained(t *testing.T) {
+	for version, filename := range versionToEmbeddedFileMapping {
+		compiler := jsonschema.NewCompiler()
+		for _, sub := range subSchemaFiles {
+			sb, err := schemas.ReadFile(sub)
+			require.NoErrorf(t, err, "reading vendored sub-schema %s", sub)
+			_, err = compiler.Compile(sb)
+			require.NoErrorf(t, err, "compiling vendored sub-schema %s", sub)
+		}
+		b, err := schemas.ReadFile(filename)
+		require.NoError(t, err)
+		schema, err := compiler.Compile(b)
+		require.NoError(t, err)
+		require.Emptyf(t, schema.UnresolvedReferenceURIs(),
+			"schema %s (version %s) has unresolved external references; a sub-schema is likely missing from subSchemaFiles",
+			filename, version)
+	}
+}
+
+// TestUploadBOM_Rejects17InvalidAlgorithmFamily proves the vendored
+// cryptography-defs.schema.json is actually applied during validation: the 1.7
+// `algorithmFamily` field is constrained solely by that sub-schema's enum, so a
+// bogus value must be rejected. Without local resolution of that external ref,
+// validation would fail-open and accept it.
+func TestUploadBOM_Rejects17InvalidAlgorithmFamily(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st, Config{CheckOnFetch: false})
+	require.NoError(t, err)
+
+	bogus := `{"bomFormat":"CycloneDX","specVersion":"1.7","components":[{"type":"cryptographic-asset","name":"x","cryptoProperties":{"assetType":"algorithm","algorithmProperties":{"primitive":"key-agree","algorithmFamily":"BOGUS-NOT-A-REAL-FAMILY-999"}}}]}`
+	_, err = svc.UploadBOM(context.Background(), io.NopCloser(strings.NewReader(bogus)), "1.7")
+	require.ErrorIs(t, err, ErrValidation)
+}
