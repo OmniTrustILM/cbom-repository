@@ -20,9 +20,9 @@ keywords:
   - cbom
   - repository
 maintainers:
-  - name: CZERTAINLY
+  - name: OmniTrustILM
     email: info@czertainly.com
-    url: https://github.com/CZERTAINLY/CZERTAINLY-Helm-Charts
+    url: https://github.com/OmniTrustILM
 type: application
 sources:
   - https://github.com/CZERTAINLY/CZERTAINLY
