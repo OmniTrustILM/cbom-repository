@@ -31,21 +31,19 @@ Let's see each endpoint in greater detail.
 
 ### POST /v1/bom (Upload)
 
-The upload operation requires a valid `Content-Type` header. At this time, only JSON format using CycloneDX Schema version 1.6 is supported.
+The upload operation requires a valid `Content-Type` header. At this time, only JSON format is supported, and CycloneDX **1.6 and 1.7** are supported.
 This means the `Content-Type` header must be set to: 
 ```
 application/vnd.cyclonedx+json
 ```
 
-Optionally, you may specify an explicit version, for example:
+Specify the version via the media type, e.g.:
 ```
-application/vnd.cyclonedx+json; Version=1.6
+Content-Type: application/vnd.cyclonedx+json; version=1.7
 ```
 
-If a version is provided, the handler will validate the uploaded BOM document against the corresponding CycloneDX schema specification.
-If no version is supplied, the handler will attempt to decode the BOM and automatically determine the correct schema version to validate against.
-
-Support for additional formats, including the upcoming CycloneDX 1.7 specification, is planned to be added shortly.
+When the `version` parameter is omitted, the server uses the configured default (`APP_DEFAULT_BOM_VERSION`, default `1.6`).
+The server validates the document against the **declared** version; a body whose `specVersion` disagrees with the declared version is rejected with 400.
 
 #### Upload behavior
 
@@ -104,3 +102,4 @@ The following environment variables are used to configure the `CBOM-Repository`:
 | `APP_S3_ENDPOINT` | ![](https://img.shields.io/badge/-NO-red.svg) | | s3-compatible store endpoint, leave empty for aws roles or default aws env. variables to take precedence |
 | `APP_S3_BUCKET` | ![](https://img.shields.io/badge/-YES-success.svg) | | bucket name |
 | `APP_S3_USE_PATH_STYLE` | ![](https://img.shields.io/badge/-YES-success.svg) | `true` | Use s3 path style |
+| `APP_DEFAULT_BOM_VERSION` | ![](https://img.shields.io/badge/-YES-success.svg) | `1.6` | CycloneDX version assumed when an upload's Content-Type omits the `version` parameter; must be a supported version or the service refuses to start |

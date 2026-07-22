@@ -3,7 +3,7 @@ info:
   title: CBOM-Repository Service API
   description: |-
     REST API for uploading, retrieving and searching of cryptographic software bill of materials documents.
-    A cryptographic software bill of materials document adheres to CycloneDX schema version 1.6.
+    A cryptographic software bill of materials document adheres to CycloneDX schema version 1.6 or 1.7.
 
   contact:
     name: CZERTAINLY
@@ -26,6 +26,12 @@ paths:
       operationId: uploadBOM
       requestBody:
         required: true
+        description: >-
+          CycloneDX BOM document. Select the schema version via the media-type
+          `version` parameter, e.g. `application/vnd.cyclonedx+json; version=1.7`
+          (supported: 1.6, 1.7). When omitted, the server's configured default
+          (APP_DEFAULT_BOM_VERSION, default 1.6) is used. The document's own
+          `specVersion` must match the declared version.
         content:
            application/vnd.cyclonedx+json:
             schema:
@@ -41,7 +47,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/BOMCreateResponse'
         '400':
-          description: Bad Request
+          description: Bad Request (e.g. malformed BOM, or unsupported/mismatched CycloneDX version)
           content:
             application/problem+json:
               schema:
@@ -53,7 +59,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '415':
-          description: Unsupported media type (e.g. wrong content type, or unsupported CDX version)
+          description: Unsupported media type (wrong base media type; not `application/vnd.cyclonedx+json`)
           content:
             application/problem+json:
               schema:

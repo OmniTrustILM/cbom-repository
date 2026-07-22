@@ -211,6 +211,10 @@ cbomRepo:
   usePathStyle: true
   accessKey: "minioadmin"
   secretKey: "minioadmin"
+  # CycloneDX version assumed when an upload's Content-Type omits the `version`
+  # parameter. Must be a supported version (e.g. "1.6" or "1.7") or the service
+  # refuses to start.
+  defaultBomVersion: "1.6"
 
 minio:
   enabled: false

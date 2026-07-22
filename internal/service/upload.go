@@ -43,7 +43,7 @@ type BOMCreated struct {
 // Parameters:
 //   - ctx: Context for cancellation, deadlines and additional slog fields.
 //   - rc: Reader containing the BOM document (will be closed by this function)
-//   - schemaVersion: Expected CycloneDX schema version (e.g., "1.6")
+//   - schemaVersion: Expected CycloneDX schema version (e.g., "1.6" or "1.7")
 //
 // Returns:
 //   - BOMCreated: Contains the serial number, version, and crypto statistics of the stored BOM
