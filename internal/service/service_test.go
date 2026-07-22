@@ -30,8 +30,9 @@ func TestNewFunc(t *testing.T) {
 	)
 	require.NoError(t, err)
 	require.True(t, svc.VersionSupported("1.6"))
+	require.True(t, svc.VersionSupported("1.7"))
 	require.False(t, svc.VersionSupported("1.4"))
-	require.Equal(t, []string{"1.6"}, svc.SupportedVersion())
+	require.Equal(t, []string{"1.6", "1.7"}, svc.SupportedVersion())
 }
 
 func TestSearch_Success(t *testing.T) {

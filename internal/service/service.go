@@ -34,6 +34,7 @@ var schemas embed.FS
 // and then extend this variable with the mapping.
 var versionToEmbeddedFileMapping = map[string]string{
 	"1.6": "schemas/bom-1.6.schema.json",
+	"1.7": "schemas/bom-1.7.schema.json",
 }
 
 type Config struct {
