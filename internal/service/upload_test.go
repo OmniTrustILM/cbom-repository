@@ -376,7 +376,13 @@ func TestSupportedVersionAndVersionSupported(t *testing.T) {
 func awsString(s string) *string { return &s }
 
 func TestCycloneDX17_ReEncodePreserves17Fields(t *testing.T) {
-	// A 1.7 crypto-asset carrying a 1.7-only field (algorithmFamily).
+	// Guards that cyclonedx-go's decode->encode round-trip — the same
+	// NewBOMDecoder/NewBOMEncoder(JSON) API pair the upload re-encode path
+	// uses (upload.go:63 decode, upload.go:147 encode) — preserves 1.7-only
+	// fields. A dependency-capability guard: if cyclonedx-go stopped modelling
+	// a 1.7 field, the re-encode upload path would silently drop it while
+	// schema validation (run on the original bytes) still passed.
+	// "ECDH" is a documented valid algorithmFamily value (bom-1.7 schema examples).
 	input := `{
   "bomFormat": "CycloneDX",
   "specVersion": "1.7",
@@ -386,7 +392,7 @@ func TestCycloneDX17_ReEncodePreserves17Fields(t *testing.T) {
       "name": "example-alg",
       "cryptoProperties": {
         "assetType": "algorithm",
-        "algorithmProperties": { "algorithmFamily": "rsa" }
+        "algorithmProperties": { "algorithmFamily": "ECDH" }
       }
     }
   ]
@@ -398,7 +404,14 @@ func TestCycloneDX17_ReEncodePreserves17Fields(t *testing.T) {
 	var out bytes.Buffer
 	require.NoError(t, cdx.NewBOMEncoder(&out, cdx.BOMFileFormatJSON).Encode(&bom))
 
-	// The 1.7-only field must survive the decode -> encode round-trip used by the upload path.
-	require.Contains(t, out.String(), "algorithmFamily")
-	require.Contains(t, out.String(), "rsa")
+	// Decode the re-encoded output back and assert the 1.7-only field survived
+	// at its exact path (stronger than a whole-document substring match).
+	var rt cdx.BOM
+	require.NoError(t, cdx.NewBOMDecoder(bytes.NewReader(out.Bytes()), cdx.BOMFileFormatJSON).Decode(&rt))
+	require.NotNil(t, rt.Components)
+	require.Len(t, *rt.Components, 1)
+	cp := (*rt.Components)[0].CryptoProperties
+	require.NotNil(t, cp)
+	require.NotNil(t, cp.AlgorithmProperties)
+	require.Equal(t, "ECDH", cp.AlgorithmProperties.AlgorithmFamily)
 }
