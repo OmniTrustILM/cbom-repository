@@ -175,13 +175,17 @@ func minimalBOMJSON(withSerial bool, serial string, version int, extra bool) str
 	if extra {
 		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\",\n  \"extra\": \"x\"\n}"
 	}
+	return minimalBOMJSONVersion("1.6", withSerial, serial, version)
+}
+
+func minimalBOMJSONVersion(specVersion string, withSerial bool, serial string, version int) string {
 	if withSerial && version > 0 {
-		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\",\n  \"serialNumber\": \"" + serial + "\",\n  \"version\": " + strings.TrimSpace(strings.Join([]string{string(rune('0' + version))}, "")) + "\n}"
+		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"" + specVersion + "\",\n  \"serialNumber\": \"" + serial + "\",\n  \"version\": " + string(rune('0'+version)) + "\n}"
 	}
 	if withSerial {
-		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\",\n  \"serialNumber\": \"" + serial + "\"\n}"
+		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"" + specVersion + "\",\n  \"serialNumber\": \"" + serial + "\"\n}"
 	}
-	return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\"\n}"
+	return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"" + specVersion + "\"\n}"
 }
 
 func TestUploadBOM_Success_MissingSerialGeneratesAndStores(t *testing.T) {
@@ -452,6 +456,83 @@ func TestUploadBOM_UnknownSpecVersionIsValidationError(t *testing.T) {
 	// specVersion "1.8" is unknown to cyclonedx-go v0.11.0 -> Decode fails.
 	// It must be classified as a validation error (400), not a bare error (500).
 	rc := io.NopCloser(strings.NewReader("{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.8\"\n}"))
+	_, err = svc.UploadBOM(context.Background(), rc, "1.7")
+	require.ErrorIs(t, err, ErrValidation)
+}
+
+func TestUploadBOM_1_7_HappyPath(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st, Config{CheckOnFetch: false})
+	require.NoError(t, err)
+
+	// serial-number-missing 1.7 doc -> generates URN, stores original + modified (2 uploads)
+	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return((*s3.HeadObjectOutput)(nil), &types.NotFound{}).AnyTimes()
+	s3Manager.EXPECT().UploadObject(gomock.Any(), gomock.Any()).Return(&manager.UploadObjectOutput{}, nil).Times(2)
+
+	rc := io.NopCloser(strings.NewReader(minimalBOMJSONVersion("1.7", false, "", 0)))
+	res, err := svc.UploadBOM(context.Background(), rc, "1.7")
+	require.NoError(t, err)
+	require.NotEmpty(t, res.SerialNumber)
+	require.Equal(t, 1, res.Version)
+}
+
+func TestUploadBOM_VersionMismatch_DeclaredVsBody(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st, Config{CheckOnFetch: false})
+	require.NoError(t, err)
+
+	// declared 1.6, body says 1.7 -> rejected at cross-check (400) before schema validation
+	rc := io.NopCloser(strings.NewReader(minimalBOMJSONVersion("1.7", false, "", 0)))
+	_, err = svc.UploadBOM(context.Background(), rc, "1.6")
+	require.ErrorIs(t, err, ErrValidation)
+
+	// declared 1.7, body says 1.6 -> symmetric rejection (400)
+	rc2 := io.NopCloser(strings.NewReader(minimalBOMJSONVersion("1.6", false, "", 0)))
+	_, err = svc.UploadBOM(context.Background(), rc2, "1.7")
+	require.ErrorIs(t, err, ErrValidation)
+}
+
+func TestUploadBOM_1_6ShapedContentDeclared1_7_Accepted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st, Config{CheckOnFetch: false})
+	require.NoError(t, err)
+
+	// 1.6-style content (a plain library component, valid in both 1.6 and 1.7) that
+	// honestly declares specVersion 1.7. 1.7 is a backward-compatible superset, so this
+	// is valid 1.7 and must be accepted. Distinct from the minimal happy-path fixture.
+	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return((*s3.HeadObjectOutput)(nil), &types.NotFound{}).AnyTimes()
+	s3Manager.EXPECT().UploadObject(gomock.Any(), gomock.Any()).Return(&manager.UploadObjectOutput{}, nil).Times(2)
+
+	body := `{"bomFormat":"CycloneDX","specVersion":"1.7","components":[{"type":"library","name":"example-lib"}]}`
+	rc := io.NopCloser(strings.NewReader(body))
+	_, err = svc.UploadBOM(context.Background(), rc, "1.7")
+	require.NoError(t, err)
+}
+
+func TestUploadBOM_1_7_InvalidSchema(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st, Config{CheckOnFetch: false})
+	require.NoError(t, err)
+
+	// Declared 1.7, body declares 1.7 (passes the cross-check) but has a disallowed
+	// top-level property -> fails 1.7 schema validation (root additionalProperties:false).
+	rc := io.NopCloser(strings.NewReader(`{"bomFormat":"CycloneDX","specVersion":"1.7","extra":"x"}`))
 	_, err = svc.UploadBOM(context.Background(), rc, "1.7")
 	require.ErrorIs(t, err, ErrValidation)
 }
