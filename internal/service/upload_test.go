@@ -437,3 +437,21 @@ func TestUploadBOM_MissingValidatorIsValidationError(t *testing.T) {
 	_, err = svc.UploadBOM(context.Background(), rc, "1.5")
 	require.ErrorIs(t, err, ErrValidation)
 }
+
+func TestUploadBOM_UnknownSpecVersionIsValidationError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st, Config{CheckOnFetch: false})
+	require.NoError(t, err)
+
+	// specVersion "1.8" is unknown to cyclonedx-go v0.11.0 -> Decode fails.
+	// It must be classified as a validation error (400), not a bare error (500).
+	rc := io.NopCloser(strings.NewReader("{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.8\"\n}"))
+	_, err = svc.UploadBOM(context.Background(), rc, "1.7")
+	require.ErrorIs(t, err, ErrValidation)
+}

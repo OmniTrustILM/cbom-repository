@@ -63,7 +63,9 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 	decoder := cdx.NewBOMDecoder(tee, cdx.BOMFileFormatJSON)
 	if err := decoder.Decode(&bom); err != nil {
 		slog.ErrorContext(ctx, "`cdx.Decode()` failed.", slog.String("error", err.Error()))
-		return BOMCreated{}, err
+		// Wrap as ErrValidation (-> 400) while keeping any *http.MaxBytesError reachable
+		// via errors.As, so an oversized body is still classified 413 by the handler.
+		return BOMCreated{}, fmt.Errorf("%w: %w", ErrValidation, err)
 	}
 
 	if err := uploadInputChecks(bom, schemaVersion); err != nil {
