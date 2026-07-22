@@ -5,6 +5,7 @@ FROM golang:1.26-alpine3.22 AS builder
 
 ARG VERSION=dev
 ENV CGO_ENABLED=0 \
+    GOTOOLCHAIN=auto \
     GOFLAGS="-trimpath" \
     LDFLAGS="-s -w -X main.version=${VERSION}"
 
