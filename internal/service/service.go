@@ -30,7 +30,7 @@ var (
 var schemas embed.FS
 
 // Please note: When you want to add a new schema version, please first
-// add the schema file into the `schemas` subdirectory in `interna/service`
+// add the schema file into the `schemas` subdirectory in `internal/service`
 // and then extend this variable with the mapping.
 var versionToEmbeddedFileMapping = map[string]string{
 	"1.6": "schemas/bom-1.6.schema.json",
