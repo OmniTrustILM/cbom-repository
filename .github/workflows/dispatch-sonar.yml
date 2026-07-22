@@ -37,7 +37,7 @@ jobs:
       # through env vars and read via process.env so they are never interpolated
       # into the script source (a value containing a quote could inject code).
       - name: Dispatch Sonar workflow with inputs
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           PR_NUMBER: ${{ steps.ctx.outputs.pr_number }}
           HEAD_SHA: ${{ steps.ctx.outputs.head_sha }}
