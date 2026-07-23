@@ -76,7 +76,7 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 	if !ok {
 		// Reachable only via a direct service call (the HTTP layer gates on VersionSupported).
 		// Treat as a validation error so it maps to 400, not 500.
-		slog.ErrorContext(ctx, "Missing schema validator!!!", slog.String("version", schemaVersion))
+		slog.ErrorContext(ctx, "No schema validator for the requested version.", slog.String("version", schemaVersion))
 		return BOMCreated{}, fmt.Errorf("%w: no schema validator for version %s", ErrValidation, schemaVersion)
 	}
 
