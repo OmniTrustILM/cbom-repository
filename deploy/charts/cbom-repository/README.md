@@ -28,7 +28,7 @@ kubectl create namespace omnitrust
 
 Copy the default `values.yaml` from the Helm chart and modify the values accordingly:
 ```bash
-helm show values oci://harbor.3key.company/omnitrustilm-helm/cbom-repository > values.yaml
+helm show values oci://harbor.3key.company/czertainly-helm/cbom-repository > values.yaml
 ```
 Now edit the `values.yaml` according to your desired state, see [Configurable parameters](#configurable-parameters) for more information.
 
@@ -36,7 +36,7 @@ Now edit the `values.yaml` according to your desired state, see [Configurable pa
 
 For the basic installation, run:
 ```bash
-helm install --namespace omnitrust -f values.yaml omnitrustilm-cbom-repository oci://harbor.3key.company/omnitrustilm-helm/cbom-repository
+helm install --namespace omnitrust -f values.yaml omnitrustilm-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
 ```
 
 **Save your configuration**
@@ -50,7 +50,7 @@ Always make sure you save the `values.yaml` and all `--set` and `--set-file` opt
 
 For upgrading the installation, update your configuration and run:
 ```bash
-helm upgrade --namespace omnitrust -f values.yaml omnitrustilm-cbom-repository oci://harbor.3key.company/omnitrustilm-helm/cbom-repository
+helm upgrade --namespace omnitrust -f values.yaml omnitrustilm-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
 ```
 
 ### Uninstall

@@ -49,7 +49,8 @@ var versionToEmbeddedFileMapping = map[string]string{
 // that violate these sub-schemas (e.g. the 1.7 `algorithmFamily` and `ellipticCurves`
 // enums, SPDX license expressions, JSF signatures).
 //
-// Vendored from http://cyclonedx.org/schema/<file> (CycloneDX schemas, Apache-2.0).
+// Vendored from http://cyclonedx.org/schema/<file> (CycloneDX, Apache-2.0); see
+// internal/service/schemas/LICENSE and NOTICE.md for the license text and attribution.
 var subSchemaFiles = []string{
 	"schemas/spdx.schema.json",
 	"schemas/jsf-0.82.schema.json",
