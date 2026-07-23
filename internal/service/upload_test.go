@@ -547,6 +547,11 @@ func TestUploadBOM_1_7_InvalidSchema(t *testing.T) {
 func TestSchemasSelfContained(t *testing.T) {
 	for version, filename := range versionToEmbeddedFileMapping {
 		compiler := jsonschema.NewCompiler()
+		// Mirror production (see New): block network loaders so this test cannot be
+		// fooled into passing by a networked CI runner silently fetching a missing
+		// sub-schema from cyclonedx.org — the failure it exists to catch.
+		compiler.RegisterLoader("http", noNetworkSchemaLoader)
+		compiler.RegisterLoader("https", noNetworkSchemaLoader)
 		for _, sub := range subSchemaFiles {
 			sb, err := schemas.ReadFile(sub)
 			require.NoErrorf(t, err, "reading vendored sub-schema %s", sub)
