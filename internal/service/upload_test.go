@@ -563,6 +563,30 @@ func TestSchemasSelfContained(t *testing.T) {
 	}
 }
 
+// TestSchemaCompilerRefusesNetworkFetch proves that the no-network loader wired up
+// by New actually blocks external `$ref` resolution over the wire. A schema whose
+// `$ref` points at an unvendored cyclonedx.org URL must never resolve silently: the
+// loader either fails compilation with our sentinel error, or the reference is left
+// unresolved — in no case is it fetched from the network. This makes the
+// self-contained guarantee robust even if a future sub-schema is forgotten.
+func TestSchemaCompilerRefusesNetworkFetch(t *testing.T) {
+	compiler := jsonschema.NewCompiler()
+	compiler.RegisterLoader("http", noNetworkSchemaLoader)
+	compiler.RegisterLoader("https", noNetworkSchemaLoader)
+
+	// References a sub-schema that is deliberately NOT vendored and NOT pre-registered,
+	// so the only way to resolve it would be a network fetch.
+	root := []byte(`{"$id":"http://example.test/root.json","$ref":"http://cyclonedx.org/schema/does-not-exist-999.schema.json"}`)
+	schema, err := compiler.Compile(root)
+	if err != nil {
+		require.ErrorContains(t, err, "refused to fetch",
+			"unvendored $ref must fail through the no-network loader, not some other path")
+		return
+	}
+	require.NotEmpty(t, schema.UnresolvedReferenceURIs(),
+		"unvendored external $ref was resolved without going through the no-network loader — a network fetch was not blocked")
+}
+
 // TestUploadBOM_Rejects17InvalidAlgorithmFamily proves the vendored
 // cryptography-defs.schema.json is actually applied during validation: the 1.7
 // `algorithmFamily` field is constrained solely by that sub-schema's enum, so a
