@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestUploadInputChecks(t *testing.T) {
+func TestCheckContentType(t *testing.T) {
 	testCases := map[string]struct {
 		input          string
 		wantErr        bool
