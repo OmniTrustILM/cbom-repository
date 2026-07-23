@@ -3,11 +3,11 @@ package http_test
 import (
 	"testing"
 
-	internalHttp "github.com/CZERTAINLY/CBOM-Repository/internal/http"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
+	internalHttp "github.com/OmniTrustILM/cbom-repository/internal/http"
+	"github.com/OmniTrustILM/cbom-repository/internal/service"
+	"github.com/OmniTrustILM/cbom-repository/internal/store"
 
-	mockS3 "github.com/CZERTAINLY/CBOM-Repository/internal/store/mock"
+	mockS3 "github.com/OmniTrustILM/cbom-repository/internal/store/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )

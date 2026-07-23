@@ -6,18 +6,18 @@ info:
     A cryptographic software bill of materials document adheres to CycloneDX schema version 1.6 or 1.7.
 
   contact:
-    name: CZERTAINLY
-    url: https://www.czertainly.com
-    email: getinfo@czertainly.com
+    name: OmniTrustILM
+    url: https://www.omnitrust.com
+    email: getinfo@omnitrust.com
 
   license:
     name: MIT License
-    url: https://github.com/CZERTAINLY/CBOM-Repository/blob/main/LICENSE.md
+    url: https://github.com/OmniTrustILM/cbom-repository/blob/main/LICENSE.md
   version: 0.1.0
 
 externalDocs:
-  description: CZERTAINLY Documentation
-  url: https://docs.czertainly.com
+  description: OmniTrustILM Documentation
+  url: https://docs.omnitrust.com
 
 paths:
   /v1/bom:

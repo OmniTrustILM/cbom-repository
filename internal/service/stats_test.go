@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
+	"github.com/OmniTrustILM/cbom-repository/internal/service"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/stretchr/testify/require"

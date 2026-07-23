@@ -4,10 +4,10 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/env"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/http"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
+	"github.com/OmniTrustILM/cbom-repository/internal/env"
+	"github.com/OmniTrustILM/cbom-repository/internal/http"
+	"github.com/OmniTrustILM/cbom-repository/internal/service"
+	"github.com/OmniTrustILM/cbom-repository/internal/store"
 
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +22,7 @@ func TestNewFunc(t *testing.T) {
 			envVars: map[string]string{
 				"APP_S3_REGION":          "eu-west-1",
 				"APP_S3_ENDPOINT":        "http://localhost:9000",
-				"APP_S3_BUCKET":          "czertainly",
+				"APP_S3_BUCKET":          "omnitrust",
 				"APP_S3_ACCESS_KEY":      "minioadmin",
 				"APP_S3_SECRET_KEY":      "adminpassword",
 				"APP_S3_USE_PATH_STYLE":  "true",
@@ -37,7 +37,7 @@ func TestNewFunc(t *testing.T) {
 				Store: store.Config{
 					Region:       "eu-west-1",
 					Endpoint:     "http://localhost:9000",
-					Bucket:       "czertainly",
+					Bucket:       "omnitrust",
 					AccessKey:    "minioadmin",
 					SecretKey:    "adminpassword",
 					UsePathStyle: true,
@@ -58,7 +58,7 @@ func TestNewFunc(t *testing.T) {
 			envVars: map[string]string{
 				"APP_S3_REGION":         "eu-west-1",
 				"APP_S3_ENDPOINT":       "http://localhost:9000",
-				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_BUCKET":         "omnitrust",
 				"APP_S3_ACCESS_KEY":     "minioadmin",
 				"APP_S3_SECRET_KEY":     "adminpassword",
 				"APP_S3_USE_PATH_STYLE": "true",
@@ -68,7 +68,7 @@ func TestNewFunc(t *testing.T) {
 				Store: store.Config{
 					Region:       "eu-west-1",
 					Endpoint:     "http://localhost:9000",
-					Bucket:       "czertainly",
+					Bucket:       "omnitrust",
 					AccessKey:    "minioadmin",
 					SecretKey:    "adminpassword",
 					UsePathStyle: true,
@@ -89,7 +89,7 @@ func TestNewFunc(t *testing.T) {
 			envVars: map[string]string{
 				"APP_S3_REGION":         "eu-west-1",
 				"APP_S3_ENDPOINT":       "http://localhost:9000",
-				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_BUCKET":         "omnitrust",
 				"APP_S3_ACCESS_KEY":     "minioadmin",
 				"APP_S3_SECRET_KEY":     "adminpassword",
 				"APP_S3_USE_PATH_STYLE": "true",
@@ -101,7 +101,7 @@ func TestNewFunc(t *testing.T) {
 			envVars: map[string]string{
 				"APP_S3_REGION":          "eu-west-1",
 				"APP_S3_ENDPOINT":        "http://localhost:9000",
-				"APP_S3_BUCKET":          "czertainly",
+				"APP_S3_BUCKET":          "omnitrust",
 				"APP_S3_ACCESS_KEY":      "minioadmin",
 				"APP_S3_SECRET_KEY":      "adminpassword",
 				"APP_S3_USE_PATH_STYLE":  "true",
@@ -113,7 +113,7 @@ func TestNewFunc(t *testing.T) {
 			envVars: map[string]string{
 				"APP_S3_REGION":          "eu-west-1",
 				"APP_S3_ENDPOINT":        "http://localhost:9000",
-				"APP_S3_BUCKET":          "czertainly",
+				"APP_S3_BUCKET":          "omnitrust",
 				"APP_S3_ACCESS_KEY":      "minioadmin",
 				"APP_S3_SECRET_KEY":      "adminpassword",
 				"APP_S3_USE_PATH_STYLE":  "true",
@@ -125,7 +125,7 @@ func TestNewFunc(t *testing.T) {
 			envVars: map[string]string{
 				"APP_S3_REGION":          "eu-west-1",
 				"APP_S3_ENDPOINT":        "http://localhost:9000",
-				"APP_S3_BUCKET":          "czertainly",
+				"APP_S3_BUCKET":          "omnitrust",
 				"APP_S3_ACCESS_KEY":      "minioadmin",
 				"APP_S3_SECRET_KEY":      "adminpassword",
 				"APP_S3_USE_PATH_STYLE":  "true",
@@ -137,7 +137,7 @@ func TestNewFunc(t *testing.T) {
 			envVars: map[string]string{
 				"APP_S3_REGION":         "eu-west-1",
 				"APP_S3_ENDPOINT":       "http://localhost:9000",
-				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_BUCKET":         "omnitrust",
 				"APP_S3_ACCESS_KEY":     "minioadmin",
 				"APP_S3_SECRET_KEY":     "adminpassword",
 				"APP_S3_USE_PATH_STYLE": "false",
@@ -147,7 +147,7 @@ func TestNewFunc(t *testing.T) {
 				Store: store.Config{
 					Region:       "eu-west-1",
 					Endpoint:     "http://localhost:9000",
-					Bucket:       "czertainly",
+					Bucket:       "omnitrust",
 					AccessKey:    "minioadmin",
 					SecretKey:    "adminpassword",
 					UsePathStyle: false,
@@ -168,7 +168,7 @@ func TestNewFunc(t *testing.T) {
 			envVars: map[string]string{
 				"APP_S3_REGION":     "eu-west-1",
 				"APP_S3_ENDPOINT":   "http://localhost:9000",
-				"APP_S3_BUCKET":     "czertainly",
+				"APP_S3_BUCKET":     "omnitrust",
 				"APP_S3_ACCESS_KEY": "minioadmin",
 				"APP_S3_SECRET_KEY": "adminpassword",
 			},
@@ -177,7 +177,7 @@ func TestNewFunc(t *testing.T) {
 				Store: store.Config{
 					Region:       "eu-west-1",
 					Endpoint:     "http://localhost:9000",
-					Bucket:       "czertainly",
+					Bucket:       "omnitrust",
 					AccessKey:    "minioadmin",
 					SecretKey:    "adminpassword",
 					UsePathStyle: true,
@@ -197,7 +197,7 @@ func TestNewFunc(t *testing.T) {
 		"endpoint may be omitted": {
 			envVars: map[string]string{
 				"APP_S3_REGION":         "eu-west-1",
-				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_BUCKET":         "omnitrust",
 				"APP_S3_ACCESS_KEY":     "minioadmin",
 				"APP_S3_SECRET_KEY":     "adminpassword",
 				"APP_S3_USE_PATH_STYLE": "true",
@@ -206,7 +206,7 @@ func TestNewFunc(t *testing.T) {
 			want: env.Config{
 				Store: store.Config{
 					Region:       "eu-west-1",
-					Bucket:       "czertainly",
+					Bucket:       "omnitrust",
 					AccessKey:    "minioadmin",
 					SecretKey:    "adminpassword",
 					UsePathStyle: true,
@@ -235,7 +235,7 @@ func TestNewFunc(t *testing.T) {
 		"whitespaces-only-aws-region": {
 			envVars: map[string]string{
 				"APP_S3_REGION":     "  \t \t  ",
-				"APP_S3_BUCKET":     "czertainly",
+				"APP_S3_BUCKET":     "omnitrust",
 				"APP_S3_ACCESS_KEY": "minioadmin",
 				"APP_S3_SECRET_KEY": "adminpassword",
 			},
@@ -244,7 +244,7 @@ func TestNewFunc(t *testing.T) {
 		"whitespaces-only-access-key": {
 			envVars: map[string]string{
 				"APP_S3_REGION":     "eu-west-1",
-				"APP_S3_BUCKET":     "czertainly",
+				"APP_S3_BUCKET":     "omnitrust",
 				"APP_S3_ACCESS_KEY": "      ",
 				"APP_S3_SECRET_KEY": "adminpassword",
 			},
@@ -253,7 +253,7 @@ func TestNewFunc(t *testing.T) {
 		"whitespaces-only-aws-secret": {
 			envVars: map[string]string{
 				"APP_S3_REGION":     "eu-west-1",
-				"APP_S3_BUCKET":     "czertainly",
+				"APP_S3_BUCKET":     "omnitrust",
 				"APP_S3_ACCESS_KEY": "minioadmin",
 				"APP_S3_SECRET_KEY": " \t  \t",
 			},
@@ -272,7 +272,7 @@ func TestNewFunc(t *testing.T) {
 		"region-missing": {
 			envVars: map[string]string{
 				"APP_S3_ENDPOINT":       "http://localhost:9000",
-				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_BUCKET":         "omnitrust",
 				"APP_S3_ACCESS_KEY":     "minioadmin",
 				"APP_S3_SECRET_KEY":     "adminpassword",
 				"APP_S3_USE_PATH_STYLE": "true",
@@ -283,7 +283,7 @@ func TestNewFunc(t *testing.T) {
 			envVars: map[string]string{
 				"APP_S3_REGION":         "eu-west-1",
 				"APP_S3_ENDPOINT":       "http://localhost:9000",
-				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_BUCKET":         "omnitrust",
 				"APP_S3_SECRET_KEY":     "adminpassword",
 				"APP_S3_USE_PATH_STYLE": "true",
 			},
@@ -293,7 +293,7 @@ func TestNewFunc(t *testing.T) {
 			envVars: map[string]string{
 				"APP_S3_REGION":         "eu-west-1",
 				"APP_S3_ENDPOINT":       "http://localhost:9000",
-				"APP_S3_BUCKET":         "czertainly",
+				"APP_S3_BUCKET":         "omnitrust",
 				"APP_S3_ACCESS_KEY":     "minioadmin",
 				"APP_S3_USE_PATH_STYLE": "true",
 			},

@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
+	"github.com/OmniTrustILM/cbom-repository/internal/log"
+	"github.com/OmniTrustILM/cbom-repository/internal/store"
 
 	"github.com/google/uuid"
 	jss "github.com/kaptinlin/jsonschema"

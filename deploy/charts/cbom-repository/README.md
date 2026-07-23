@@ -1,8 +1,8 @@
-# CBOM Repository - CZERTAINLY
+# CBOM Repository - OmniTrustILM
 
-> This repository is part of the open-source project CZERTAINLY. You can find more information about the project at [CZERTAINLY](https://github.com/CZERTAINLY/CZERTAINLY) repository, including the contribution guide.
+> This repository is part of the open-source project OmniTrustILM. You can find more information about the project at [OmniTrustILM](https://github.com/OmniTrustILM) repository, including the contribution guide.
 
-This repository contains [Helm](https://helm.sh/) charts as part of the CZERTAINLY platform.
+This repository contains [Helm](https://helm.sh/) charts as part of the OmniTrustILM platform.
 
 ## Prerequisites
 - Kubernetes 1.19+
@@ -18,7 +18,7 @@ This repository contains [Helm](https://helm.sh/) charts as part of the CZERTAIN
 
 We’ll need to define a Kubernetes namespace where the resources created by the Chart should be installed:
 ```bash
-kubectl create namespace czertainly
+kubectl create namespace omnitrust
 ```
 
 **Create `values.yaml`**
@@ -28,7 +28,7 @@ kubectl create namespace czertainly
 
 Copy the default `values.yaml` from the Helm chart and modify the values accordingly:
 ```bash
-helm show values oci://harbor.3key.company/czertainly-helm/cbom-repository > values.yaml
+helm show values oci://harbor.3key.company/omnitrustilm-helm/cbom-repository > values.yaml
 ```
 Now edit the `values.yaml` according to your desired state, see [Configurable parameters](#configurable-parameters) for more information.
 
@@ -36,7 +36,7 @@ Now edit the `values.yaml` according to your desired state, see [Configurable pa
 
 For the basic installation, run:
 ```bash
-helm install --namespace czertainly -f values.yaml czertainly-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
+helm install --namespace omnitrust -f values.yaml omnitrustilm-cbom-repository oci://harbor.3key.company/omnitrustilm-helm/cbom-repository
 ```
 
 **Save your configuration**
@@ -50,14 +50,14 @@ Always make sure you save the `values.yaml` and all `--set` and `--set-file` opt
 
 For upgrading the installation, update your configuration and run:
 ```bash
-helm upgrade --namespace czertainly -f values.yaml czertainly-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
+helm upgrade --namespace omnitrust -f values.yaml omnitrustilm-cbom-repository oci://harbor.3key.company/omnitrustilm-helm/cbom-repository
 ```
 
 ### Uninstall
 
 You can use the `helm uninstall` command to uninstall the application:
 ```bash
-helm uninstall --namespace czertainly czertainly-cbom-repository
+helm uninstall --namespace omnitrust omnitrustilm-cbom-repository
 ```
 
 ## Configurable parameters
@@ -99,7 +99,7 @@ The following values may be configured:
 | httpsProxy                                   | `""`                        | Proxy to be used to access external resources through https           |
 | noProxy                                      | `""`                        | Defines list of external resources that should not use proxy settings |
 | image.registry                               | `docker.io`                 | Docker registry name for the image                                    |
-| image.repository                             | `czertainly`                | Docker image repository name                                          |
+| image.repository                             | `omnitrustilm`                | Docker image repository name                                          |
 | image.name                                   | `cbom-repository`           | Docker image name                                                     |
 | image.tag                                    | `1.0.0`                     | Docker image tag                                                      |
 | image.digest                                 | `""`                        | Docker image digest, will override tag if specified                   |

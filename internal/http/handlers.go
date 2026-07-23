@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
+	"github.com/OmniTrustILM/cbom-repository/internal/service"
 
 	"github.com/gorilla/mux"
 )

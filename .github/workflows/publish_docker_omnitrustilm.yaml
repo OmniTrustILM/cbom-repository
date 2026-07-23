@@ -1,4 +1,4 @@
-name: Publish CZERTAINLY Docker image
+name: Publish OmniTrustILM Docker image
 
 on:
   push:
@@ -24,18 +24,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
-      - name: Log in to CZERTAINLY Docker Hub
+      - name: Log in to OmniTrustILM Docker Hub
         uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
-          username: ${{ secrets.DOCKER_HUB_CZERTAINLY_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_CZERTAINLY_PASSWORD }}
+          username: ${{ secrets.DOCKER_HUB_OMNITRUSTILM_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_OMNITRUSTILM_PASSWORD }}
 
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
-            czertainly/cbom-repository
+            omnitrustilm/cbom-repository
           tags: |
             type=ref,event=tag
             type=semver,pattern={{major}}.{{minor}}
@@ -114,11 +114,11 @@ jobs:
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           DIGEST: ${{ steps.build-and-push.outputs.digest }}
 
-      - name: Push README to CZERTAINLY Docker Hub
-        uses: christian-korneck/update-container-description-action@v1
+      - name: Push README to OmniTrustILM Docker Hub
+        uses: christian-korneck/update-container-description-action@d36005551adeaba9698d8d67a296bd16fa91f8e8 # v1
         env:
-          DOCKER_USER: ${{ secrets.DOCKER_HUB_CZERTAINLY_USERNAME }}
-          DOCKER_PASS: ${{ secrets.DOCKER_HUB_CZERTAINLY_PASSWORD }}
+          DOCKER_USER: ${{ secrets.DOCKER_HUB_OMNITRUSTILM_USERNAME }}
+          DOCKER_PASS: ${{ secrets.DOCKER_HUB_OMNITRUSTILM_PASSWORD }}
         with:
-          destination_container_repo: czertainly/cbom-repository
+          destination_container_repo: omnitrustilm/cbom-repository
           provider: dockerhub

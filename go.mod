@@ -1,4 +1,4 @@
-module github.com/CZERTAINLY/CBOM-Repository
+module github.com/OmniTrustILM/cbom-repository
 
 go 1.26.4
 

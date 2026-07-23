@@ -9,8 +9,8 @@ import (
 	"io"
 	"log/slog"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
+	"github.com/OmniTrustILM/cbom-repository/internal/log"
+	"github.com/OmniTrustILM/cbom-repository/internal/store"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/google/uuid"

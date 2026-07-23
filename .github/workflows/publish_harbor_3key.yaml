@@ -36,7 +36,7 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
-            harbor.3key.company/czertainly/cbom-repository
+            harbor.3key.company/omnitrustilm/cbom-repository
           tags: |
             type=ref,event=tag
             type=semver,pattern={{major}}.{{minor}}
@@ -121,5 +121,5 @@ jobs:
           DOCKER_USER: ${{ secrets.HARBOR_3KEY_USERNAME }}
           DOCKER_PASS: ${{ secrets.HARBOR_3KEY_PASSWORD }}
         with:
-          destination_container_repo: harbor.3key.company/czertainly/cbom-repository
+          destination_container_repo: harbor.3key.company/omnitrustilm/cbom-repository
           provider: harbor2

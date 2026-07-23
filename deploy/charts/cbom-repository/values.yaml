@@ -64,7 +64,7 @@ replicaCount: 1
 image:
   # default registry name
   registry: docker.io
-  repository: czertainly
+  repository: omnitrustilm
   name: cbom-repository
   tag: 1.0.0
   # the digest to be used instead of the tag
@@ -124,8 +124,8 @@ curl:
   image:
     # default registry name
     registry: docker.io
-    repository: czertainly
-    name: czertainly-curl
+    repository: omnitrustilm
+    name: omnitrustilm-curl
     tag: 8.16.0
     # the digest to be used instead of the tag
     digest: ""
@@ -222,8 +222,8 @@ minio:
   image:
     # default registry name
     registry: docker.io
-    repository: czertainly
-    name: czertainly-minio
+    repository: omnitrustilm
+    name: omnitrustilm-minio
     tag: RELEASE.2025-09-07T16-13-09Z
     # the digest to be used instead of the tag
     digest: ""
@@ -293,7 +293,7 @@ minio:
 
   console:
     enabled: true
-    redirectUrl: "https://czertainly.local/minio"
+    redirectUrl: "https://omnitrust.local/minio"
 
   # persistence parameters
   persistence:

@@ -3,7 +3,7 @@ package http_test
 import (
 	"testing"
 
-	internalHttp "github.com/CZERTAINLY/CBOM-Repository/internal/http"
+	internalHttp "github.com/OmniTrustILM/cbom-repository/internal/http"
 	"github.com/stretchr/testify/require"
 )
 

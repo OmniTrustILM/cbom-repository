@@ -26,7 +26,7 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: |
-            czertainly/cbom-repository
+            omnitrustilm/cbom-repository
           tags: |
             type=ref,event=tag
             type=raw,value=develop-latest

@@ -3,7 +3,7 @@ package http
 import (
 	"fmt"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
+	"github.com/OmniTrustILM/cbom-repository/internal/service"
 )
 
 // ValidateDefaultBOMVersion returns an error if the configured default upload
