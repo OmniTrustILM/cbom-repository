@@ -99,7 +99,7 @@ The following values may be configured:
 | httpsProxy                                   | `""`                        | Proxy to be used to access external resources through https           |
 | noProxy                                      | `""`                        | Defines list of external resources that should not use proxy settings |
 | image.registry                               | `docker.io`                 | Docker registry name for the image                                    |
-| image.repository                             | `omnitrustilm`                | Docker image repository name                                          |
+| image.repository                             | `czertainly`                | Docker image repository name                                          |
 | image.name                                   | `cbom-repository`           | Docker image name                                                     |
 | image.tag                                    | `1.0.0`                     | Docker image tag                                                      |
 | image.digest                                 | `""`                        | Docker image digest, will override tag if specified                   |
