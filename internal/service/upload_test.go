@@ -3,9 +3,9 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -172,21 +172,42 @@ func TestURNValid(t *testing.T) {
 // These tests exercise UploadBOM behavior using gomock for the store S3 client and manager.
 // -----------------------------------------------------------------------------
 
-func minimalBOMJSON(withSerial bool, serial string, version int, extra bool) string {
-	if extra {
-		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"1.6\",\n  \"extra\": \"x\"\n}"
-	}
-	return minimalBOMJSONVersion("1.6", withSerial, serial, version)
+// minimalBOM is a minimal CycloneDX document used to build test payloads. Optional
+// fields are omitted when empty so the helpers can produce documents with or without
+// a serialNumber/version.
+type minimalBOM struct {
+	BomFormat    string `json:"bomFormat"`
+	SpecVersion  string `json:"specVersion"`
+	SerialNumber string `json:"serialNumber,omitempty"`
+	Version      int    `json:"version,omitempty"`
+	Extra        string `json:"extra,omitempty"`
 }
 
-func minimalBOMJSONVersion(specVersion string, withSerial bool, serial string, version int) string {
-	if withSerial && version > 0 {
-		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"" + specVersion + "\",\n  \"serialNumber\": \"" + serial + "\",\n  \"version\": " + strconv.Itoa(version) + "\n}"
+func marshalMinimalBOM(t *testing.T, bom minimalBOM) string {
+	t.Helper()
+	b, err := json.Marshal(bom)
+	require.NoError(t, err)
+	return string(b)
+}
+
+func minimalBOMJSON(t *testing.T, withSerial bool, serial string, version int, extra bool) string {
+	t.Helper()
+	if extra {
+		return marshalMinimalBOM(t, minimalBOM{BomFormat: "CycloneDX", SpecVersion: "1.6", Extra: "x"})
 	}
+	return minimalBOMJSONVersion(t, "1.6", withSerial, serial, version)
+}
+
+func minimalBOMJSONVersion(t *testing.T, specVersion string, withSerial bool, serial string, version int) string {
+	t.Helper()
+	bom := minimalBOM{BomFormat: "CycloneDX", SpecVersion: specVersion}
 	if withSerial {
-		return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"" + specVersion + "\",\n  \"serialNumber\": \"" + serial + "\"\n}"
+		bom.SerialNumber = serial
+		if version > 0 {
+			bom.Version = version
+		}
 	}
-	return "{\n  \"bomFormat\": \"CycloneDX\",\n  \"specVersion\": \"" + specVersion + "\"\n}"
+	return marshalMinimalBOM(t, bom)
 }
 
 func TestUploadBOM_Success_MissingSerialGeneratesAndStores(t *testing.T) {
@@ -205,7 +226,7 @@ func TestUploadBOM_Success_MissingSerialGeneratesAndStores(t *testing.T) {
 	// Upload called twice
 	s3Manager.EXPECT().UploadObject(gomock.Any(), gomock.Any()).Return(&manager.UploadObjectOutput{}, nil).Times(2)
 
-	rc := io.NopCloser(strings.NewReader(minimalBOMJSON(false, "", 0, false)))
+	rc := io.NopCloser(strings.NewReader(minimalBOMJSON(t, false, "", 0, false)))
 	res, err := svc.UploadBOM(context.Background(), rc, "1.6")
 	require.NoError(t, err)
 	require.NotEmpty(t, res.SerialNumber)
@@ -224,7 +245,7 @@ func TestUploadBOM_Conflict_AlreadyExists(t *testing.T) {
 	require.NoError(t, err)
 
 	serial := "urn:uuid:550e8400-e29b-11d4-a716-446655440000"
-	rc := io.NopCloser(strings.NewReader(minimalBOMJSON(true, serial, 2, false)))
+	rc := io.NopCloser(strings.NewReader(minimalBOMJSON(t, true, serial, 2, false)))
 
 	// HeadObject returns nil error -> exists true
 	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return(&s3.HeadObjectOutput{}, nil)
@@ -252,7 +273,7 @@ func TestUploadBOM_InvalidJSONAndSchemaMismatch(t *testing.T) {
 	require.Error(t, err)
 
 	// schema mismatch: extra property not allowed
-	rc2 := io.NopCloser(strings.NewReader(minimalBOMJSON(false, "", 0, true)))
+	rc2 := io.NopCloser(strings.NewReader(minimalBOMJSON(t, false, "", 0, true)))
 	_, err = svc.UploadBOM(context.Background(), rc2, "1.6")
 	require.ErrorIs(t, err, ErrValidation)
 }
@@ -474,7 +495,7 @@ func TestUploadBOM_1_7_HappyPath(t *testing.T) {
 	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return((*s3.HeadObjectOutput)(nil), &types.NotFound{}).AnyTimes()
 	s3Manager.EXPECT().UploadObject(gomock.Any(), gomock.Any()).Return(&manager.UploadObjectOutput{}, nil).Times(2)
 
-	rc := io.NopCloser(strings.NewReader(minimalBOMJSONVersion("1.7", false, "", 0)))
+	rc := io.NopCloser(strings.NewReader(minimalBOMJSONVersion(t, "1.7", false, "", 0)))
 	res, err := svc.UploadBOM(context.Background(), rc, "1.7")
 	require.NoError(t, err)
 	require.NotEmpty(t, res.SerialNumber)
@@ -491,12 +512,12 @@ func TestUploadBOM_VersionMismatch_DeclaredVsBody(t *testing.T) {
 	require.NoError(t, err)
 
 	// declared 1.6, body says 1.7 -> rejected at cross-check (400) before schema validation
-	rc := io.NopCloser(strings.NewReader(minimalBOMJSONVersion("1.7", false, "", 0)))
+	rc := io.NopCloser(strings.NewReader(minimalBOMJSONVersion(t, "1.7", false, "", 0)))
 	_, err = svc.UploadBOM(context.Background(), rc, "1.6")
 	require.ErrorIs(t, err, ErrValidation)
 
 	// declared 1.7, body says 1.6 -> symmetric rejection (400)
-	rc2 := io.NopCloser(strings.NewReader(minimalBOMJSONVersion("1.6", false, "", 0)))
+	rc2 := io.NopCloser(strings.NewReader(minimalBOMJSONVersion(t, "1.6", false, "", 0)))
 	_, err = svc.UploadBOM(context.Background(), rc2, "1.7")
 	require.ErrorIs(t, err, ErrValidation)
 }
