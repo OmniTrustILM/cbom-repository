@@ -49,3 +49,6 @@ golangci-lint-report.xml
 
 # For local testing purposes
 /for-testing/
+
+# Compiled binary (produced by `go build ./cmd/cbom-repository`)
+/cbom-repository
