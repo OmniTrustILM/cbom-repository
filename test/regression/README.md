@@ -20,7 +20,7 @@ docker compose down -v            # stop + clean
 
 Positive: 1.6 upload, 1.7 upload, retrieve 1.7 (byte-preserved), list versions, search.
 Negative: version/body mismatch → 400, unsupported version (1.4) → 400, unknown `specVersion` (1.8) → 400, wrong base media type → 415, oversized → 413 (optional).
-Integration: simulates core's `CbomRepositoryClient` request shape (no `version=` param) — proves 1.6 works but 1.7 is rejected until core sends the version.
+Integration: simulates core's `CbomRepositoryClient` request shape (no `version=` param) — the server auto-detects the version from the document's `specVersion`, so both 1.6 and 1.7 bodies are accepted.
 
 Sample docs: `samples/bom-1.6.json`, `samples/bom-1.7.json` (each a crypto-asset; the 1.7 one carries the 1.7-only `algorithmFamily`).
 
@@ -42,8 +42,9 @@ platform setting to point at this cbom-repository (e.g. `http://cbom-repository:
 
 ### Practical options for regression testing the integration
 1. **Contract simulation (included):** `run.sh` already reproduces core's exact
-   `CbomRepositoryClient` request shape against the live cbom-repository. This is what
-   regression-catches the 1.7 integration gap without the platform.
+   `CbomRepositoryClient` request shape (no `version=` param) against the live
+   cbom-repository, confirming version auto-detection accepts both 1.6 and 1.7
+   without the platform.
 2. **Full platform:** bring up the OmniTrust platform deployment, add
    `cbom-repository` (this compose's app service) to that network, and set the CBOM
    Repository URL platform setting. Exercise core's `/v1/cbom` endpoints.

@@ -48,10 +48,10 @@ check "unknown specVersion 1.8 -> 400"      400 -X POST "$BASE/v1/bom" -H "Conte
 check "wrong base media type -> 415"        415 -X POST "$BASE/v1/bom" -H "Content-Type: application/json" --data-binary @"$DIR/samples/bom-1.6.json"
 
 echo "== integration: simulate core's CbomRepositoryClient (no version= param) =="
-# core sends Content-Type WITHOUT a version parameter -> server uses APP_DEFAULT_BOM_VERSION (1.6).
-check "core-shape + 1.6 body -> 201 (works today)"  201 -X POST "$BASE/v1/bom" -H "Content-Type: $CT" --data-binary @"$DIR/samples/bom-1.6.json"
-check "core-shape + 1.7 body -> 400 (needs core fix)" 400 -X POST "$BASE/v1/bom" -H "Content-Type: $CT" --data-binary @"$DIR/samples/bom-1.7.json"
-echo "  ^ confirms the companion core change: CbomRepositoryClient must send '; version=<specVersion>'."
+# core sends Content-Type WITHOUT a version parameter -> the server auto-detects the
+# version from the document's specVersion, so both 1.6 and 1.7 bodies are accepted.
+check "core-shape + 1.6 body -> 201 (auto-detected)"  201 -X POST "$BASE/v1/bom" -H "Content-Type: $CT" --data-binary @"$DIR/samples/bom-1.6.json"
+check "core-shape + 1.7 body -> 201 (auto-detected)"  201 -X POST "$BASE/v1/bom" -H "Content-Type: $CT" --data-binary @"$DIR/samples/bom-1.7.json"
 
 echo "== optional: oversized body -> 413 (set REG_OVERSIZE=1 to run; generates ~21MiB) =="
 if [ "${REG_OVERSIZE:-0}" = "1" ]; then
