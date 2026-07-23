@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/OmniTrustILM/cbom-repository/internal/store"
 	mockS3 "github.com/OmniTrustILM/cbom-repository/internal/store/mock"
-	cdx "github.com/CycloneDX/cyclonedx-go"
 	manager "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
@@ -556,6 +556,47 @@ func TestUploadBOM_1_7_InvalidSchema(t *testing.T) {
 	// top-level property -> fails 1.7 schema validation (root additionalProperties:false).
 	rc := io.NopCloser(strings.NewReader(`{"bomFormat":"CycloneDX","specVersion":"1.7","extra":"x"}`))
 	_, err = svc.UploadBOM(context.Background(), rc, "1.7")
+	require.ErrorIs(t, err, ErrValidation)
+}
+
+// TestUploadBOM_AutodetectsVersionWhenUndeclared proves that when no version is
+// declared (empty string — the path taken when a client omits the Content-Type
+// `version` parameter, as core's CbomRepositoryClient does) the service detects the
+// version from the document's own specVersion and validates against it. Without this,
+// an undeclared 1.7 upload would be rejected against a fixed default version.
+func TestUploadBOM_AutodetectsVersionWhenUndeclared(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st, Config{CheckOnFetch: false})
+	require.NoError(t, err)
+
+	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return((*s3.HeadObjectOutput)(nil), &types.NotFound{}).AnyTimes()
+	s3Manager.EXPECT().UploadObject(gomock.Any(), gomock.Any()).Return(&manager.UploadObjectOutput{}, nil).Times(2)
+
+	rc := io.NopCloser(strings.NewReader(minimalBOMJSONVersion(t, "1.7", false, "", 0)))
+	res, err := svc.UploadBOM(context.Background(), rc, "")
+	require.NoError(t, err)
+	require.NotEmpty(t, res.SerialNumber)
+	require.Equal(t, 1, res.Version)
+}
+
+// TestUploadBOM_AutodetectUnsupportedVersionIsValidationError proves that an
+// auto-detected version with no compiled schema (1.5 is known to the decoder but only
+// 1.6/1.7 are registered) yields ErrValidation (400), not a bare 500.
+func TestUploadBOM_AutodetectUnsupportedVersionIsValidationError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st, Config{CheckOnFetch: false})
+	require.NoError(t, err)
+
+	rc := io.NopCloser(strings.NewReader(`{"bomFormat":"CycloneDX","specVersion":"1.5"}`))
+	_, err = svc.UploadBOM(context.Background(), rc, "")
 	require.ErrorIs(t, err, ErrValidation)
 }
 

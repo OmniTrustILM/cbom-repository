@@ -43,10 +43,9 @@ func TestNewFunc(t *testing.T) {
 					UsePathStyle: true,
 				},
 				Http: http.Config{
-					Port:              8090,
-					Prefix:            "/cbom/repo",
-					MaxBodySize:       512,
-					DefaultBOMVersion: "1.6",
+					Port:        8090,
+					Prefix:      "/cbom/repo",
+					MaxBodySize: 512,
 				},
 				LogLevel: slog.LevelDebug,
 				Service: service.Config{
@@ -74,10 +73,9 @@ func TestNewFunc(t *testing.T) {
 					UsePathStyle: true,
 				},
 				Http: http.Config{
-					Port:              8080,
-					Prefix:            "/api",
-					MaxBodySize:       20971520,
-					DefaultBOMVersion: "1.6",
+					Port:        8080,
+					Prefix:      "/api",
+					MaxBodySize: 20971520,
 				},
 				LogLevel: slog.LevelInfo,
 				Service: service.Config{
@@ -153,10 +151,9 @@ func TestNewFunc(t *testing.T) {
 					UsePathStyle: false,
 				},
 				Http: http.Config{
-					Port:              8080,
-					Prefix:            "/api",
-					MaxBodySize:       20971520,
-					DefaultBOMVersion: "1.6",
+					Port:        8080,
+					Prefix:      "/api",
+					MaxBodySize: 20971520,
 				},
 				LogLevel: slog.LevelInfo,
 				Service: service.Config{
@@ -183,10 +180,9 @@ func TestNewFunc(t *testing.T) {
 					UsePathStyle: true,
 				},
 				Http: http.Config{
-					Port:              8080,
-					Prefix:            "/api",
-					MaxBodySize:       20971520,
-					DefaultBOMVersion: "1.6",
+					Port:        8080,
+					Prefix:      "/api",
+					MaxBodySize: 20971520,
 				},
 				LogLevel: slog.LevelInfo,
 				Service: service.Config{
@@ -212,10 +208,9 @@ func TestNewFunc(t *testing.T) {
 					UsePathStyle: true,
 				},
 				Http: http.Config{
-					Port:              8080,
-					Prefix:            "/api",
-					MaxBodySize:       20971520,
-					DefaultBOMVersion: "1.6",
+					Port:        8080,
+					Prefix:      "/api",
+					MaxBodySize: 20971520,
 				},
 				LogLevel: slog.LevelInfo,
 				Service: service.Config{

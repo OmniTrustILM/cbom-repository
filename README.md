@@ -42,8 +42,8 @@ Specify the version via the media type, e.g.:
 Content-Type: application/vnd.cyclonedx+json; version=1.7
 ```
 
-When the `version` parameter is omitted, the server uses the configured default (`APP_DEFAULT_BOM_VERSION`, default `1.6`).
-The server validates the document against the **declared** version; a body whose `specVersion` disagrees with the declared version is rejected with 400.
+When the `version` parameter is omitted, the server **auto-detects** the version from the document's own `specVersion` — so a client need not declare it.
+When `version` **is** declared, the server validates against the declared version and rejects (400) a body whose `specVersion` disagrees. An unsupported version (declared or auto-detected) is also rejected with 400.
 
 #### Upload behavior
 
@@ -102,4 +102,3 @@ The following environment variables are used to configure the `CBOM-Repository`:
 | `APP_S3_ENDPOINT` | ![](https://img.shields.io/badge/-NO-red.svg) | | s3-compatible store endpoint, leave empty for aws roles or default aws env. variables to take precedence |
 | `APP_S3_BUCKET` | ![](https://img.shields.io/badge/-YES-success.svg) | | bucket name |
 | `APP_S3_USE_PATH_STYLE` | ![](https://img.shields.io/badge/-YES-success.svg) | `true` | Use s3 path style |
-| `APP_DEFAULT_BOM_VERSION` | ![](https://img.shields.io/badge/-YES-success.svg) | `1.6` | CycloneDX version assumed when an upload's Content-Type omits the `version` parameter; must be a supported version or the service refuses to start |

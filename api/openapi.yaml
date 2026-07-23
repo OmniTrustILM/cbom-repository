@@ -27,11 +27,13 @@ paths:
       requestBody:
         required: true
         description: >-
-          CycloneDX BOM document. Select the schema version via the media-type
-          `version` parameter, e.g. `application/vnd.cyclonedx+json; version=1.7`
-          (supported: 1.6, 1.7). When omitted, the server's configured default
-          (APP_DEFAULT_BOM_VERSION, default 1.6) is used. The document's own
-          `specVersion` must match the declared version.
+          CycloneDX BOM document. The schema version may be declared via the
+          media-type `version` parameter, e.g.
+          `application/vnd.cyclonedx+json; version=1.7` (supported: 1.6, 1.7); when
+          declared, the document's own `specVersion` must match it. When the
+          parameter is omitted, the server auto-detects the version from the
+          document's `specVersion`. An unsupported version (declared or detected)
+          is rejected with 400.
         content:
            application/vnd.cyclonedx+json:
             schema:

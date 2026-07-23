@@ -9,10 +9,9 @@ import (
 
 func TestCheckContentType(t *testing.T) {
 	testCases := map[string]struct {
-		input          string
-		wantErr        bool
-		version        string
-		defaultVersion string
+		input   string
+		wantErr bool
+		version string
 	}{
 		"empty": {
 			input:   "",
@@ -22,23 +21,15 @@ func TestCheckContentType(t *testing.T) {
 			input:   "application/json, text/plain",
 			wantErr: true,
 		},
-		"missing version defaults to 1.6": {
-			input:          "application/vnd.cyclonedx+json",
-			wantErr:        false,
-			version:        "1.6",
-			defaultVersion: "1.6",
+		"missing version yields empty (auto-detect)": {
+			input:   "application/vnd.cyclonedx+json",
+			wantErr: false,
+			version: "",
 		},
-		"missing version honours configured default 1.7": {
-			input:          "application/vnd.cyclonedx+json",
-			wantErr:        false,
-			version:        "1.7",
-			defaultVersion: "1.7",
-		},
-		"expected content type": {
-			input:          "application/vnd.cyclonedx+json; Version = 1.4",
-			wantErr:        false,
-			version:        "1.4",
-			defaultVersion: "1.6",
+		"explicit version parameter is returned": {
+			input:   "application/vnd.cyclonedx+json; Version = 1.4",
+			wantErr: false,
+			version: "1.4",
 		},
 		"unexpected-1": {
 			input:   "application/json",
@@ -48,7 +39,7 @@ func TestCheckContentType(t *testing.T) {
 
 	for name, tc := range testCases {
 		t.Run(name, func(t *testing.T) {
-			ok, version := internalHttp.CheckContentType(tc.input, tc.defaultVersion)
+			ok, version := internalHttp.CheckContentType(tc.input)
 			if tc.wantErr {
 				require.False(t, ok)
 			} else {

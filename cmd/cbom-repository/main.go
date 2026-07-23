@@ -43,11 +43,6 @@ func main() {
 	}
 	slog.Debug("Service layer initialized.")
 
-	if err := internalHttp.ValidateDefaultBOMVersion(cfg.Http, svc); err != nil {
-		slog.Error("Invalid default BOM version configuration.", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-
 	// Initialize health service with storage checker
 	storageChecker := health.NewStorageChecker(store)
 	healthSvc := health.NewService(storageChecker)

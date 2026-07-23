@@ -17,7 +17,7 @@ import (
 func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// Assert content type and optional version
-	ok, version := CheckContentType(r.Header.Get(HeaderContentType), h.cfg.DefaultBOMVersion)
+	ok, version := CheckContentType(r.Header.Get(HeaderContentType))
 	if !ok {
 		unsupportedMediaType(w,
 			fmt.Sprintf("Content type value '%s' not allowed for path '%s' and method '%s'. Supported content types: %s",
@@ -25,7 +25,9 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.service.VersionSupported(version) {
+	// A version is optional; when omitted it is auto-detected from the document.
+	// Only gate here when the caller explicitly declared an unsupported version.
+	if version != "" && !h.service.VersionSupported(version) {
 		badrequest(w, fmt.Sprintf("Version '%s' not supported, supported versions: %s", version, h.service.SupportedVersion()))
 		return
 	}

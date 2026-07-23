@@ -43,13 +43,14 @@ type BOMCreated struct {
 // Parameters:
 //   - ctx: Context for cancellation, deadlines and additional slog fields.
 //   - rc: Reader containing the BOM document (will be closed by this function)
-//   - schemaVersion: Expected CycloneDX schema version (e.g., "1.6" or "1.7")
+//   - declaredVersion: CycloneDX version the caller explicitly declared (e.g. "1.6"
+//     or "1.7"), or "" to auto-detect the version from the document's specVersion.
 //
 // Returns:
 //   - BOMCreated: Contains the serial number, version, and crypto statistics of the stored BOM
 //   - error: ErrValidation if validation fails, ErrAlreadyExists if the BOM already exists,
 //     or other errors from decoding, encoding, or storage operations
-func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion string) (BOMCreated, error) {
+func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, declaredVersion string) (BOMCreated, error) {
 
 	var buf bytes.Buffer
 	tee := io.TeeReader(rc, &buf)
@@ -57,7 +58,7 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 		_ = rc.Close()
 	}()
 
-	ctx = log.ContextAttrs(ctx, slog.String("declared-bom-schema-version", schemaVersion))
+	ctx = log.ContextAttrs(ctx, slog.String("declared-bom-schema-version", declaredVersion))
 
 	var bom cdx.BOM
 	decoder := cdx.NewBOMDecoder(tee, cdx.BOMFileFormatJSON)
@@ -68,16 +69,27 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 		return BOMCreated{}, fmt.Errorf("%w: %w", ErrValidation, err)
 	}
 
-	if err := uploadInputChecks(bom, schemaVersion); err != nil {
+	// Cross-check the declared version only when the caller explicitly declared one
+	// (via the Content-Type `version` parameter); when omitted, the version is
+	// auto-detected from the document below, so there is nothing to cross-check.
+	if err := uploadInputChecks(bom, declaredVersion); err != nil {
 		return BOMCreated{}, fmt.Errorf("%w: %s", ErrValidation, err)
 	}
 
-	jsonSchema, ok := s.jsonSchemas[schemaVersion]
+	// Resolve the schema version to validate against: the explicitly declared
+	// version, or — when none was declared — the document's own specVersion.
+	effectiveVersion := declaredVersion
+	if effectiveVersion == "" {
+		effectiveVersion = bom.SpecVersion.String()
+		ctx = log.ContextAttrs(ctx, slog.String("autodetected-bom-schema-version", effectiveVersion))
+	}
+
+	jsonSchema, ok := s.jsonSchemas[effectiveVersion]
 	if !ok {
-		// Reachable only via a direct service call (the HTTP layer gates on VersionSupported).
-		// Treat as a validation error so it maps to 400, not 500.
-		slog.ErrorContext(ctx, "No schema validator for the requested version.", slog.String("version", schemaVersion))
-		return BOMCreated{}, fmt.Errorf("%w: no schema validator for version %s", ErrValidation, schemaVersion)
+		// The (declared or auto-detected) version has no compiled schema — an
+		// unsupported CycloneDX version. Treat as a validation error (400, not 500).
+		slog.ErrorContext(ctx, "No schema validator for the CycloneDX version.", slog.String("version", effectiveVersion))
+		return BOMCreated{}, fmt.Errorf("%w: unsupported CycloneDX version %q (supported: %v)", ErrValidation, effectiveVersion, s.SupportedVersion())
 	}
 
 	res := jsonSchema.Validate(buf.Bytes())
@@ -235,7 +247,7 @@ func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM,
 
 // uploadInputChecks returns error in case BOM fails any of the input checks,
 // nil otherwise.
-func uploadInputChecks(bom cdx.BOM, expectedVersion string) error {
+func uploadInputChecks(bom cdx.BOM, declaredVersion string) error {
 	if bom.BOMFormat != cdx.BOMFormat {
 		return fmt.Errorf("required format %s", cdx.BOMFormat)
 	}
@@ -244,12 +256,17 @@ func uploadInputChecks(bom cdx.BOM, expectedVersion string) error {
 		return fmt.Errorf("serial number not valid")
 	}
 
-	cdxVersion, err := knownCdxVersion(expectedVersion)
-	if err != nil {
-		return err
-	}
-	if bom.SpecVersion != cdxVersion {
-		return fmt.Errorf("required version %s", expectedVersion)
+	// When the caller explicitly declares a version, the document must match it.
+	// When it is omitted (""), the version is auto-detected from the document, so
+	// there is nothing to cross-check here.
+	if declaredVersion != "" {
+		cdxVersion, err := knownCdxVersion(declaredVersion)
+		if err != nil {
+			return err
+		}
+		if bom.SpecVersion != cdxVersion {
+			return fmt.Errorf("required version %s", declaredVersion)
+		}
 	}
 
 	return nil

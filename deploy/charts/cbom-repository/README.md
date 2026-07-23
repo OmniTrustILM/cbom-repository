@@ -122,7 +122,6 @@ The following values may be configured:
 | cbomRepo.usePathStyle                        | `true`                      | Use path style for S3 storage access                                  |
 | cbomRepo.accessKey                           | `minioadmin`                | Access key for CBOM S3 storage                                        |
 | cbomRepo.secretKey                           | `minioadmin`                | Secret key for CBOM S3 storage                                        |
-| cbomRepo.defaultBomVersion                   | `1.6`                        | CycloneDX version assumed when an upload's Content-Type omits the `version` parameter; must be a supported version or the service refuses to start |
 | minio.enabled                                | `false`                     | Enable/disable embedded MinIO server                                  |
 
 #### Customization parameters
