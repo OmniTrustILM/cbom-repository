@@ -5,7 +5,8 @@ name: cbom-regression
 #   current working tree (branch under test). App on http://localhost:8080/api.
 services:
   minio-s3:
-    image: minio/minio:latest
+    # pinned by digest for reproducible regression runs (minio/minio:latest as of 2026-07-23)
+    image: minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e
     container_name: cbom-reg-minio
     ports:
       - "9000:9000"
@@ -16,7 +17,8 @@ services:
     command: server /tmp --console-address ":9001"
 
   createbuckets:
-    image: minio/mc:latest
+    # pinned by digest for reproducible regression runs (minio/mc:latest as of 2026-07-23)
+    image: minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
     container_name: cbom-reg-mc
     depends_on:
       - minio-s3
@@ -49,5 +51,4 @@ services:
       APP_HTTP_PORT: "8080"
       APP_HTTP_PREFIX: /api
       APP_HTTP_MAX_BODY_SIZE: "20971520"
-      APP_DEFAULT_BOM_VERSION: "1.6"
       APP_LOG_LEVEL: DEBUG
