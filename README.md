@@ -32,9 +32,9 @@ Let's see each endpoint in greater detail.
 ### POST /v1/bom (Upload)
 
 The upload operation requires a valid `Content-Type` header. At this time, only JSON format is supported, and CycloneDX **1.6 and 1.7** are supported.
-This means the `Content-Type` header must be set to: 
+This means the request must include the header: 
 ```
-application/vnd.cyclonedx+json
+Content-Type: application/vnd.cyclonedx+json
 ```
 
 Specify the version via the media type, e.g.:
