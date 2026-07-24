@@ -408,8 +408,8 @@ func awsString(s string) *string { return &s }
 func TestCycloneDX17_ReEncodePreserves17Fields(t *testing.T) {
 	// Guards that cyclonedx-go's decode->encode round-trip — the same
 	// NewBOMDecoder/NewBOMEncoder(JSON) API pair the upload re-encode path
-	// uses (upload.go:63 decode, upload.go:147 encode) — preserves 1.7-only
-	// fields. A dependency-capability guard: if cyclonedx-go stopped modelling
+	// uses (NewBOMDecoder in UploadBOM, NewBOMEncoder in the uploadCase* helpers) —
+	// preserves 1.7-only fields. A dependency-capability guard: if cyclonedx-go stopped modelling
 	// a 1.7 field, the re-encode upload path would silently drop it while
 	// schema validation (run on the original bytes) still passed.
 	// "ECDH" is a documented valid algorithmFamily value (bom-1.7 schema examples).
@@ -598,6 +598,25 @@ func TestUploadBOM_AutodetectUnsupportedVersionIsValidationError(t *testing.T) {
 	rc := io.NopCloser(strings.NewReader(`{"bomFormat":"CycloneDX","specVersion":"1.5"}`))
 	_, err = svc.UploadBOM(context.Background(), rc, "")
 	require.ErrorIs(t, err, ErrValidation)
+}
+
+// On the auto-detect path (no declared version), a document with no specVersion
+// decodes to the zero SpecVersion whose String() is the raw "SpecVersion(0)". It
+// must be rejected as a validation error (400) with a clean message, not leak the
+// stringer output to the client.
+func TestUploadBOM_AutodetectMissingSpecVersionIsValidationError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st, Config{CheckOnFetch: false})
+	require.NoError(t, err)
+
+	rc := io.NopCloser(strings.NewReader(`{"bomFormat":"CycloneDX"}`))
+	_, err = svc.UploadBOM(context.Background(), rc, "")
+	require.ErrorIs(t, err, ErrValidation)
+	require.NotContains(t, err.Error(), "SpecVersion(0)")
 }
 
 // TestSchemasSelfContained asserts that every embedded bom-*.schema.json resolves

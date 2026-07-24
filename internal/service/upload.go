@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 
 	"github.com/OmniTrustILM/cbom-repository/internal/log"
 	"github.com/OmniTrustILM/cbom-repository/internal/store"
@@ -64,9 +65,21 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, declaredVersio
 	decoder := cdx.NewBOMDecoder(tee, cdx.BOMFileFormatJSON)
 	if err := decoder.Decode(&bom); err != nil {
 		slog.ErrorContext(ctx, "`cdx.Decode()` failed.", slog.String("error", err.Error()))
-		// Wrap as ErrValidation (-> 400) while keeping any *http.MaxBytesError reachable
-		// via errors.As, so an oversized body is still classified 413 by the handler.
-		return BOMCreated{}, fmt.Errorf("%w: %w", ErrValidation, err)
+		// An oversized body surfaces here as *http.MaxBytesError; return it
+		// unwrapped so the handler still classifies it 413 (via errors.As), not 400.
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return BOMCreated{}, err
+		}
+		// Transport/read failures (client disconnect, context cancel/deadline) are
+		// not a problem with the client's BOM — surface them as 5xx, not 400.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return BOMCreated{}, fmt.Errorf("reading BOM body failed: %w", err)
+		}
+		// Otherwise the body is not decodable CycloneDX JSON: a client validation
+		// error (400) with a stable message. The raw library error is kept only in
+		// the slog line above, not coupled to the client-facing response.
+		return BOMCreated{}, fmt.Errorf("%w: malformed CycloneDX JSON", ErrValidation)
 	}
 
 	// Cross-check the declared version only when the caller explicitly declared one
@@ -80,6 +93,12 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, declaredVersio
 	// version, or — when none was declared — the document's own specVersion.
 	effectiveVersion := declaredVersion
 	if effectiveVersion == "" {
+		// A document with no (or an unrecognized) specVersion decodes to the zero
+		// value, whose String() is the raw "SpecVersion(0)". Reject it with a clean
+		// message rather than leaking that stringer output to the client.
+		if bom.SpecVersion < cdx.SpecVersion1_0 {
+			return BOMCreated{}, fmt.Errorf("%w: missing or undetermined CycloneDX specVersion", ErrValidation)
+		}
 		effectiveVersion = bom.SpecVersion.String()
 		ctx = log.ContextAttrs(ctx, slog.String("autodetected-bom-schema-version", effectiveVersion))
 	}
@@ -94,7 +113,7 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, declaredVersio
 
 	res := jsonSchema.Validate(buf.Bytes())
 	if !res.IsValid() {
-		return BOMCreated{}, fmt.Errorf("%w: does not conform to the declared schema", ErrValidation)
+		return BOMCreated{}, fmt.Errorf("%w: does not conform to CycloneDX %s schema", ErrValidation, effectiveVersion)
 	}
 
 	cryptoStats := CalculateCryptoStats(ctx, &bom)

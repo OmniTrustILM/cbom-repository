@@ -17,7 +17,7 @@ info:
 
 externalDocs:
   description: OmniTrustILM Documentation
-  url: https://docs.omnitrust.com
+  url: https://docs.otilm.com
 
 paths:
   /v1/bom:
