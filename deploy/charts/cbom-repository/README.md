@@ -1,8 +1,8 @@
-# CBOM Repository - CZERTAINLY
+# CBOM Repository - OmniTrustILM
 
-> This repository is part of the open-source project CZERTAINLY. You can find more information about the project at [CZERTAINLY](https://github.com/CZERTAINLY/CZERTAINLY) repository, including the contribution guide.
+> This repository is part of the open-source project OmniTrustILM. You can find more information about the project at [OmniTrustILM](https://github.com/OmniTrustILM) repository, including the contribution guide.
 
-This repository contains [Helm](https://helm.sh/) charts as part of the CZERTAINLY platform.
+This repository contains [Helm](https://helm.sh/) charts as part of the OmniTrustILM platform.
 
 ## Prerequisites
 - Kubernetes 1.19+
@@ -18,7 +18,7 @@ This repository contains [Helm](https://helm.sh/) charts as part of the CZERTAIN
 
 We’ll need to define a Kubernetes namespace where the resources created by the Chart should be installed:
 ```bash
-kubectl create namespace czertainly
+kubectl create namespace omnitrust
 ```
 
 **Create `values.yaml`**
@@ -36,7 +36,7 @@ Now edit the `values.yaml` according to your desired state, see [Configurable pa
 
 For the basic installation, run:
 ```bash
-helm install --namespace czertainly -f values.yaml czertainly-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
+helm install --namespace omnitrust -f values.yaml omnitrustilm-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
 ```
 
 **Save your configuration**
@@ -50,14 +50,14 @@ Always make sure you save the `values.yaml` and all `--set` and `--set-file` opt
 
 For upgrading the installation, update your configuration and run:
 ```bash
-helm upgrade --namespace czertainly -f values.yaml czertainly-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
+helm upgrade --namespace omnitrust -f values.yaml omnitrustilm-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
 ```
 
 ### Uninstall
 
 You can use the `helm uninstall` command to uninstall the application:
 ```bash
-helm uninstall --namespace czertainly czertainly-cbom-repository
+helm uninstall --namespace omnitrust omnitrustilm-cbom-repository
 ```
 
 ## Configurable parameters

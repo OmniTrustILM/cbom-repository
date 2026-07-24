@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"testing"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
+	"github.com/OmniTrustILM/cbom-repository/internal/log"
 	"github.com/stretchr/testify/require"
 )
 

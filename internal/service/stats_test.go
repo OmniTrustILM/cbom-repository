@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
+	"github.com/OmniTrustILM/cbom-repository/internal/service"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/stretchr/testify/require"
@@ -166,4 +166,26 @@ func TestStatsComponentsNil(t *testing.T) {
 	require.Equal(t, 0, bomStats.CryptoAsset.Protocol.Total)
 	require.Equal(t, 0, bomStats.CryptoAsset.Related.Total)
 
+}
+
+func TestCalculateCryptoStats_1_7_ParityWithBuckets(t *testing.T) {
+	input := `{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.7",
+  "components": [
+    { "type": "cryptographic-asset", "name": "a", "cryptoProperties": { "assetType": "algorithm" } },
+    { "type": "cryptographic-asset", "name": "c", "cryptoProperties": { "assetType": "certificate" } },
+    { "type": "cryptographic-asset", "name": "p", "cryptoProperties": { "assetType": "protocol", "protocolProperties": { "type": "quic" } } },
+    { "type": "cryptographic-asset", "name": "r", "cryptoProperties": { "assetType": "related-crypto-material" } }
+  ]
+}`
+	var bom cdx.BOM
+	require.NoError(t, cdx.NewBOMDecoder(strings.NewReader(input), cdx.BOMFileFormatJSON).Decode(&bom))
+
+	stats := service.CalculateCryptoStats(context.Background(), &bom)
+	require.Equal(t, 4, stats.CryptoAsset.Total)
+	require.Equal(t, 1, stats.CryptoAsset.Algo.Total)
+	require.Equal(t, 1, stats.CryptoAsset.Cert.Total)
+	require.Equal(t, 1, stats.CryptoAsset.Protocol.Total)
+	require.Equal(t, 1, stats.CryptoAsset.Related.Total)
 }

@@ -64,6 +64,7 @@ replicaCount: 1
 image:
   # default registry name
   registry: docker.io
+  # kept on czertainly until the image is published under omnitrustilm (see #122)
   repository: czertainly
   name: cbom-repository
   tag: 1.0.0
@@ -124,6 +125,7 @@ curl:
   image:
     # default registry name
     registry: docker.io
+    # kept on czertainly until the image is published under omnitrustilm (see #122)
     repository: czertainly
     name: czertainly-curl
     tag: 8.16.0
@@ -218,6 +220,7 @@ minio:
   image:
     # default registry name
     registry: docker.io
+    # minio is discontinued; kept on czertainly pending an S3-compatible alternative (see #121)
     repository: czertainly
     name: czertainly-minio
     tag: RELEASE.2025-09-07T16-13-09Z
@@ -289,7 +292,7 @@ minio:
 
   console:
     enabled: true
-    redirectUrl: "https://czertainly.local/minio"
+    redirectUrl: "https://omnitrust.local/minio"
 
   # persistence parameters
   persistence:

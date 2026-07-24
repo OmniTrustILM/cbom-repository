@@ -4,15 +4,15 @@ apiVersion: v2
 appVersion: 1.0.0
 name: cbom-repository
 description: A Helm chart for CBOM Repository.
-home: https://github.com/CZERTAINLY/CBOM-Repository
-icon: https://github.com/CZERTAINLY/CZERTAINLY/blob/master/czertainly-logo/czertainly_sign_color.svg
+home: https://github.com/OmniTrustILM/cbom-repository
+icon: https://github.com/OmniTrustILM.png
 dependencies:
   - name: czertainly-lib
     repository: oci://harbor.3key.company/czertainly-helm
     # repository: file://../czertainly-lib
     version: 1.4.2
 keywords:
-  - czertainly
+  - omnitrust
   - trust
   - management
   - lifecycle
@@ -20,12 +20,12 @@ keywords:
   - cbom
   - repository
 maintainers:
-  - name: CZERTAINLY
-    email: info@czertainly.com
-    url: https://github.com/CZERTAINLY/CZERTAINLY-Helm-Charts
+  - name: OmniTrustILM
+    email: info@omnitrust.com
+    url: https://github.com/OmniTrustILM
 type: application
 sources:
-  - https://github.com/CZERTAINLY/CZERTAINLY
-  - https://www.czertainly.com
-  - https://docs.czertainly.com
-version: 1.0.0
+  - https://github.com/OmniTrustILM/cbom-repository
+  - https://www.omnitrust.com
+  - https://docs.otilm.com
+version: 1.1.0-develop

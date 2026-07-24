@@ -31,21 +31,19 @@ Let's see each endpoint in greater detail.
 
 ### POST /v1/bom (Upload)
 
-The upload operation requires a valid `Content-Type` header. At this time, only JSON format using CycloneDX Schema version 1.6 is supported.
-This means the `Content-Type` header must be set to: 
+The upload operation requires a valid `Content-Type` header. At this time, only JSON format is supported, and CycloneDX **1.6 and 1.7** are supported.
+This means the request must include the header: 
 ```
-application/vnd.cyclonedx+json
-```
-
-Optionally, you may specify an explicit version, for example:
-```
-application/vnd.cyclonedx+json; Version=1.6
+Content-Type: application/vnd.cyclonedx+json
 ```
 
-If a version is provided, the handler will validate the uploaded BOM document against the corresponding CycloneDX schema specification.
-If no version is supplied, the handler will attempt to decode the BOM and automatically determine the correct schema version to validate against.
+Specify the version via the media type, e.g.:
+```
+Content-Type: application/vnd.cyclonedx+json; version=1.7
+```
 
-Support for additional formats, including the upcoming CycloneDX 1.7 specification, is planned to be added shortly.
+When the `version` parameter is omitted, the server **auto-detects** the version from the document's own `specVersion` — so a client need not declare it.
+When `version` **is** declared, the server validates against the declared version and rejects (400) a body whose `specVersion` disagrees. An unsupported version (declared or auto-detected) is also rejected with 400.
 
 #### Upload behavior
 

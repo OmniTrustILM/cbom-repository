@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/health"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
+	"github.com/OmniTrustILM/cbom-repository/internal/health"
+	"github.com/OmniTrustILM/cbom-repository/internal/log"
+	"github.com/OmniTrustILM/cbom-repository/internal/service"
 
 	"github.com/gorilla/mux"
 )

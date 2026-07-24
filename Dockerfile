@@ -1,7 +1,7 @@
 ########################
 # Build Stage
 ########################
-FROM golang:1.26-alpine3.22 AS builder
+FROM golang:1.26.5-alpine3.23 AS builder
 
 ARG VERSION=dev
 ENV CGO_ENABLED=0 \
@@ -28,10 +28,10 @@ FROM alpine:3.24.1
 # apk upgrade should be removed once CVE-2026-22184 will be fixed
 RUN apk update && apk upgrade --no-cache
 
-LABEL org.opencontainers.image.authors="CZERTAINLY <support@czertainly.com>"
+LABEL org.opencontainers.image.authors="OmniTrustILM <support@omnitrust.com>"
 
-# add non root user czertainly
-RUN addgroup --system --gid 10001 czertainly && adduser --system --home /opt/czertainly --uid 10001 --ingroup czertainly czertainly
+# add non root user omnitrust
+RUN addgroup --system --gid 10001 omnitrust && adduser --system --home /opt/omnitrust --uid 10001 --ingroup omnitrust omnitrust
 
 COPY --from=builder /out/cbom-repository /usr/local/bin/cbom-repository
 
