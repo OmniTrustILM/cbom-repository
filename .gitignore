@@ -35,7 +35,7 @@ build/
 .DS_Store
 setenv.sh
 
-/internal/server/omnitrustilm/.openapi-generator/
+/internal/server/cbom-repository/.openapi-generator/
 .mirrord/
 
 artifacts

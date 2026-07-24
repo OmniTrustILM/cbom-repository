@@ -292,7 +292,7 @@ minio:
 
   console:
     enabled: true
-    redirectUrl: "https://omnitrust.local/minio"
+    redirectUrl: "https://cbom-repository.local/minio"
 
   # persistence parameters
   persistence:

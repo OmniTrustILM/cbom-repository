@@ -6,9 +6,9 @@ info:
     A cryptographic software bill of materials document adheres to CycloneDX schema version 1.6 or 1.7.
 
   contact:
-    name: OmniTrustILM
+    name: ILM
     url: https://www.omnitrust.com
-    email: getinfo@omnitrust.com
+    email: ilm@omnitrust.com
 
   license:
     name: MIT License
@@ -16,7 +16,7 @@ info:
   version: 0.1.0
 
 externalDocs:
-  description: OmniTrustILM Documentation
+  description: ILM Documentation
   url: https://docs.otilm.com
 
 paths:

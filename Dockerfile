@@ -28,10 +28,10 @@ FROM alpine:3.24.1
 # apk upgrade should be removed once CVE-2026-22184 will be fixed
 RUN apk update && apk upgrade --no-cache
 
-LABEL org.opencontainers.image.authors="OmniTrustILM <support@omnitrust.com>"
+LABEL org.opencontainers.image.authors="ILM <ilm@omnitrust.com>"
 
-# add non root user omnitrust
-RUN addgroup --system --gid 10001 omnitrust && adduser --system --home /opt/omnitrust --uid 10001 --ingroup omnitrust omnitrust
+# add non root user ilm
+RUN addgroup --system --gid 10001 ilm && adduser --system --home /opt/ilm --uid 10001 --ingroup ilm ilm
 
 COPY --from=builder /out/cbom-repository /usr/local/bin/cbom-repository
 

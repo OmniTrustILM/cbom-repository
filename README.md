@@ -100,5 +100,5 @@ The following environment variables are used to configure the `CBOM-Repository`:
 | `APP_S3_SECRET_KEY` | ![](https://img.shields.io/badge/-YES-success.svg) | | s3-compatible store secret key |
 | `APP_S3_REGION` | ![](https://img.shields.io/badge/-YES-success.svg) | | s3-compatible store Region |
 | `APP_S3_ENDPOINT` | ![](https://img.shields.io/badge/-NO-red.svg) | | s3-compatible store endpoint, leave empty for aws roles or default aws env. variables to take precedence |
-| `APP_S3_BUCKET` | ![](https://img.shields.io/badge/-YES-success.svg) | | bucket name |
+| `APP_S3_BUCKET` | ![](https://img.shields.io/badge/-YES-success.svg) | | Bucket name for the s3-compatible store. **Deployment-critical:** this value determines where BOMs are stored; changing it on an existing deployment points the service at a different bucket, so previously stored documents become inaccessible (they are not migrated). Keep it stable across upgrades. |
 | `APP_S3_USE_PATH_STYLE` | ![](https://img.shields.io/badge/-YES-success.svg) | `true` | Use s3 path style |

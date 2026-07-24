@@ -1,8 +1,8 @@
-# CBOM Repository - OmniTrustILM
+# CBOM Repository - ILM
 
-> This repository is part of the open-source project OmniTrustILM. You can find more information about the project at [OmniTrustILM](https://github.com/OmniTrustILM) repository, including the contribution guide.
+> This repository is part of the open-source project ILM. You can find more information about the project at [ILM](https://github.com/OmniTrustILM) repository, including the contribution guide.
 
-This repository contains [Helm](https://helm.sh/) charts as part of the OmniTrustILM platform.
+This repository contains [Helm](https://helm.sh/) charts as part of the ILM platform.
 
 ## Prerequisites
 - Kubernetes 1.19+
@@ -18,7 +18,7 @@ This repository contains [Helm](https://helm.sh/) charts as part of the OmniTrus
 
 We’ll need to define a Kubernetes namespace where the resources created by the Chart should be installed:
 ```bash
-kubectl create namespace omnitrust
+kubectl create namespace ilm
 ```
 
 **Create `values.yaml`**
@@ -36,7 +36,7 @@ Now edit the `values.yaml` according to your desired state, see [Configurable pa
 
 For the basic installation, run:
 ```bash
-helm install --namespace omnitrust -f values.yaml omnitrustilm-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
+helm install --namespace ilm -f values.yaml ilm-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
 ```
 
 **Save your configuration**
@@ -50,14 +50,14 @@ Always make sure you save the `values.yaml` and all `--set` and `--set-file` opt
 
 For upgrading the installation, update your configuration and run:
 ```bash
-helm upgrade --namespace omnitrust -f values.yaml omnitrustilm-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
+helm upgrade --namespace ilm -f values.yaml ilm-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
 ```
 
 ### Uninstall
 
 You can use the `helm uninstall` command to uninstall the application:
 ```bash
-helm uninstall --namespace omnitrust omnitrustilm-cbom-repository
+helm uninstall --namespace ilm ilm-cbom-repository
 ```
 
 ## Configurable parameters
