@@ -619,6 +619,31 @@ func TestUploadBOM_AutodetectMissingSpecVersionIsValidationError(t *testing.T) {
 	require.NotContains(t, err.Error(), "SpecVersion(0)")
 }
 
+// ctxErrReadCloser is an io.ReadCloser whose Read always fails with the given
+// error, simulating a transport/read failure (client disconnect, context
+// deadline) mid-body-read.
+type ctxErrReadCloser struct{ err error }
+
+func (r ctxErrReadCloser) Read([]byte) (int, error) { return 0, r.err }
+func (r ctxErrReadCloser) Close() error             { return nil }
+
+// A read failure mid-decode must NOT be reclassified as a client validation
+// error (400); it surfaces as a non-ErrValidation error the handler maps to 5xx.
+func TestUploadBOM_ReadFailureNotValidationError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Manager := mockS3.NewMockS3Manager(ctrl)
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+	svc, err := New(st, Config{CheckOnFetch: false})
+	require.NoError(t, err)
+
+	_, err = svc.UploadBOM(context.Background(), ctxErrReadCloser{err: context.DeadlineExceeded}, "")
+	require.Error(t, err)
+	require.NotErrorIs(t, err, ErrValidation)
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+}
+
 // TestSchemasSelfContained asserts that every embedded bom-*.schema.json resolves
 // all of its external `$ref`s from the vendored sub-schemas alone, leaving nothing
 // to be fetched over the network. This is network-independent: if a vendored
