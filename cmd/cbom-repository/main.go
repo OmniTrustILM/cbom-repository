@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/env"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/health"
-	internalHttp "github.com/CZERTAINLY/CBOM-Repository/internal/http"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
+	"github.com/OmniTrustILM/cbom-repository/internal/env"
+	"github.com/OmniTrustILM/cbom-repository/internal/health"
+	internalHttp "github.com/OmniTrustILM/cbom-repository/internal/http"
+	"github.com/OmniTrustILM/cbom-repository/internal/log"
+	"github.com/OmniTrustILM/cbom-repository/internal/service"
+	"github.com/OmniTrustILM/cbom-repository/internal/store"
 )
 
 var version = "dev"

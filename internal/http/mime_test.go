@@ -3,11 +3,11 @@ package http_test
 import (
 	"testing"
 
-	internalHttp "github.com/CZERTAINLY/CBOM-Repository/internal/http"
+	internalHttp "github.com/OmniTrustILM/cbom-repository/internal/http"
 	"github.com/stretchr/testify/require"
 )
 
-func TestUploadInputChecks(t *testing.T) {
+func TestCheckContentType(t *testing.T) {
 	testCases := map[string]struct {
 		input   string
 		wantErr bool
@@ -21,12 +21,12 @@ func TestUploadInputChecks(t *testing.T) {
 			input:   "application/json, text/plain",
 			wantErr: true,
 		},
-		"missing version": {
+		"missing version yields empty (auto-detect)": {
 			input:   "application/vnd.cyclonedx+json",
 			wantErr: false,
-			version: "1.6",
+			version: "",
 		},
-		"expected content type": {
+		"explicit version parameter is returned": {
 			input:   "application/vnd.cyclonedx+json; Version = 1.4",
 			wantErr: false,
 			version: "1.4",

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
-	mockS3 "github.com/CZERTAINLY/CBOM-Repository/internal/store/mock"
+	"github.com/OmniTrustILM/cbom-repository/internal/store"
+	mockS3 "github.com/OmniTrustILM/cbom-repository/internal/store/mock"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	manager "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"

@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
+	"github.com/OmniTrustILM/cbom-repository/internal/service"
 
 	"github.com/gorilla/mux"
 )
@@ -25,8 +25,10 @@ func (h Server) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.service.VersionSupported(version) {
-		badrequest(w, fmt.Sprintf("Version '%s' not supported, supported versions: %s", version, h.service.SupportedVersion()))
+	// A version is optional; when omitted it is auto-detected from the document.
+	// Only gate here when the caller explicitly declared an unsupported version.
+	if version != "" && !h.service.VersionSupported(version) {
+		badrequest(w, fmt.Sprintf("Version %q not supported, supported versions: %s", version, strings.Join(h.service.SupportedVersion(), ", ")))
 		return
 	}
 

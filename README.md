@@ -31,21 +31,19 @@ Let's see each endpoint in greater detail.
 
 ### POST /v1/bom (Upload)
 
-The upload operation requires a valid `Content-Type` header. At this time, only JSON format using CycloneDX Schema version 1.6 is supported.
-This means the `Content-Type` header must be set to: 
+The upload operation requires a valid `Content-Type` header. At this time, only JSON format is supported, and CycloneDX **1.6 and 1.7** are supported.
+This means the request must include the header: 
 ```
-application/vnd.cyclonedx+json
-```
-
-Optionally, you may specify an explicit version, for example:
-```
-application/vnd.cyclonedx+json; Version=1.6
+Content-Type: application/vnd.cyclonedx+json
 ```
 
-If a version is provided, the handler will validate the uploaded BOM document against the corresponding CycloneDX schema specification.
-If no version is supplied, the handler will attempt to decode the BOM and automatically determine the correct schema version to validate against.
+Specify the version via the media type, e.g.:
+```
+Content-Type: application/vnd.cyclonedx+json; version=1.7
+```
 
-Support for additional formats, including the upcoming CycloneDX 1.7 specification, is planned to be added shortly.
+When the `version` parameter is omitted, the server **auto-detects** the version from the document's own `specVersion` — so a client need not declare it.
+When `version` **is** declared, the server validates against the declared version and rejects (400) a body whose `specVersion` disagrees. An unsupported version (declared or auto-detected) is also rejected with 400.
 
 #### Upload behavior
 
@@ -102,5 +100,5 @@ The following environment variables are used to configure the `CBOM-Repository`:
 | `APP_S3_SECRET_KEY` | ![](https://img.shields.io/badge/-YES-success.svg) | | s3-compatible store secret key |
 | `APP_S3_REGION` | ![](https://img.shields.io/badge/-YES-success.svg) | | s3-compatible store Region |
 | `APP_S3_ENDPOINT` | ![](https://img.shields.io/badge/-NO-red.svg) | | s3-compatible store endpoint, leave empty for aws roles or default aws env. variables to take precedence |
-| `APP_S3_BUCKET` | ![](https://img.shields.io/badge/-YES-success.svg) | | bucket name |
+| `APP_S3_BUCKET` | ![](https://img.shields.io/badge/-YES-success.svg) | | Bucket name for the s3-compatible store. **Deployment-critical:** this value determines where BOMs are stored; changing it on an existing deployment points the service at a different bucket, so previously stored documents become inaccessible (they are not migrated). Keep it stable across upgrades. |
 | `APP_S3_USE_PATH_STYLE` | ![](https://img.shields.io/badge/-YES-success.svg) | `true` | Use s3 path style |

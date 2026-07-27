@@ -8,9 +8,10 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
+	"github.com/OmniTrustILM/cbom-repository/internal/log"
+	"github.com/OmniTrustILM/cbom-repository/internal/store"
 
 	cdx "github.com/CycloneDX/cyclonedx-go"
 	"github.com/google/uuid"
@@ -43,13 +44,14 @@ type BOMCreated struct {
 // Parameters:
 //   - ctx: Context for cancellation, deadlines and additional slog fields.
 //   - rc: Reader containing the BOM document (will be closed by this function)
-//   - schemaVersion: Expected CycloneDX schema version (e.g., "1.6")
+//   - declaredVersion: CycloneDX version the caller explicitly declared (e.g. "1.6"
+//     or "1.7"), or "" to auto-detect the version from the document's specVersion.
 //
 // Returns:
 //   - BOMCreated: Contains the serial number, version, and crypto statistics of the stored BOM
 //   - error: ErrValidation if validation fails, ErrAlreadyExists if the BOM already exists,
 //     or other errors from decoding, encoding, or storage operations
-func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion string) (BOMCreated, error) {
+func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, declaredVersion string) (BOMCreated, error) {
 
 	var buf bytes.Buffer
 	tee := io.TeeReader(rc, &buf)
@@ -57,29 +59,61 @@ func (s Service) UploadBOM(ctx context.Context, rc io.ReadCloser, schemaVersion 
 		_ = rc.Close()
 	}()
 
-	ctx = log.ContextAttrs(ctx, slog.String("declared-bom-schema-version", schemaVersion))
+	ctx = log.ContextAttrs(ctx, slog.String("declared-bom-schema-version", declaredVersion))
 
 	var bom cdx.BOM
 	decoder := cdx.NewBOMDecoder(tee, cdx.BOMFileFormatJSON)
 	if err := decoder.Decode(&bom); err != nil {
 		slog.ErrorContext(ctx, "`cdx.Decode()` failed.", slog.String("error", err.Error()))
-		return BOMCreated{}, err
+		// An oversized body surfaces here as *http.MaxBytesError; return it
+		// unwrapped so the handler still classifies it 413 (via errors.As), not 400.
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return BOMCreated{}, err
+		}
+		// Transport/read failures (client disconnect, context cancel/deadline) are
+		// not a problem with the client's BOM — surface them as 5xx, not 400.
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return BOMCreated{}, fmt.Errorf("reading BOM body failed: %w", err)
+		}
+		// Otherwise the body is not decodable CycloneDX JSON: a client validation
+		// error (400) with a stable message. The raw library error is kept only in
+		// the slog line above, not coupled to the client-facing response.
+		return BOMCreated{}, fmt.Errorf("%w: malformed CycloneDX JSON", ErrValidation)
 	}
 
-	if err := uploadInputChecks(bom, schemaVersion); err != nil {
+	// Cross-check the declared version only when the caller explicitly declared one
+	// (via the Content-Type `version` parameter); when omitted, the version is
+	// auto-detected from the document below, so there is nothing to cross-check.
+	if err := uploadInputChecks(bom, declaredVersion); err != nil {
 		return BOMCreated{}, fmt.Errorf("%w: %s", ErrValidation, err)
 	}
 
-	jsonSchema, ok := s.jsonSchemas[schemaVersion]
+	// Resolve the schema version to validate against: the explicitly declared
+	// version, or — when none was declared — the document's own specVersion.
+	effectiveVersion := declaredVersion
+	if effectiveVersion == "" {
+		// A document with no (or an unrecognized) specVersion decodes to the zero
+		// value, whose String() is the raw "SpecVersion(0)". Reject it with a clean
+		// message rather than leaking that stringer output to the client.
+		if bom.SpecVersion < cdx.SpecVersion1_0 {
+			return BOMCreated{}, fmt.Errorf("%w: missing or undetermined CycloneDX specVersion", ErrValidation)
+		}
+		effectiveVersion = bom.SpecVersion.String()
+		ctx = log.ContextAttrs(ctx, slog.String("autodetected-bom-schema-version", effectiveVersion))
+	}
+
+	jsonSchema, ok := s.jsonSchemas[effectiveVersion]
 	if !ok {
-		// this shouldn't happen, if http handler correctly checks against `VersionSupported()`
-		slog.ErrorContext(ctx, "Missing schema validator!!!", slog.String("version", schemaVersion))
-		return BOMCreated{}, fmt.Errorf("schema validator missing for version %s", schemaVersion)
+		// The (declared or auto-detected) version has no compiled schema — an
+		// unsupported CycloneDX version. Treat as a validation error (400, not 500).
+		slog.ErrorContext(ctx, "No schema validator for the CycloneDX version.", slog.String("version", effectiveVersion))
+		return BOMCreated{}, fmt.Errorf("%w: unsupported CycloneDX version %q (supported: %v)", ErrValidation, effectiveVersion, s.SupportedVersion())
 	}
 
 	res := jsonSchema.Validate(buf.Bytes())
 	if !res.IsValid() {
-		return BOMCreated{}, fmt.Errorf("%w: does not conform to the declared schema", ErrValidation)
+		return BOMCreated{}, fmt.Errorf("%w: does not conform to CycloneDX %s schema", ErrValidation, effectiveVersion)
 	}
 
 	cryptoStats := CalculateCryptoStats(ctx, &bom)
@@ -232,7 +266,7 @@ func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM,
 
 // uploadInputChecks returns error in case BOM fails any of the input checks,
 // nil otherwise.
-func uploadInputChecks(bom cdx.BOM, expectedVersion string) error {
+func uploadInputChecks(bom cdx.BOM, declaredVersion string) error {
 	if bom.BOMFormat != cdx.BOMFormat {
 		return fmt.Errorf("required format %s", cdx.BOMFormat)
 	}
@@ -241,12 +275,17 @@ func uploadInputChecks(bom cdx.BOM, expectedVersion string) error {
 		return fmt.Errorf("serial number not valid")
 	}
 
-	cdxVersion, err := knownCdxVersion(expectedVersion)
-	if err != nil {
-		return err
-	}
-	if bom.SpecVersion != cdxVersion {
-		return fmt.Errorf("required version %s", expectedVersion)
+	// When the caller explicitly declares a version, the document must match it.
+	// When it is omitted (""), the version is auto-detected from the document, so
+	// there is nothing to cross-check here.
+	if declaredVersion != "" {
+		cdxVersion, err := knownCdxVersion(declaredVersion)
+		if err != nil {
+			return err
+		}
+		if bom.SpecVersion != cdxVersion {
+			return fmt.Errorf("required version %s", declaredVersion)
+		}
 	}
 
 	return nil
@@ -276,6 +315,8 @@ func knownCdxVersion(v string) (cdx.SpecVersion, error) {
 		return cdx.SpecVersion1_5, nil
 	case "1.6":
 		return cdx.SpecVersion1_6, nil
+	case "1.7":
+		return cdx.SpecVersion1_7, nil
 	default:
 		return -1, fmt.Errorf("unknown cyclonedx bom version %s", v)
 	}

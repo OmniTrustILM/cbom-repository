@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/health"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
+	"github.com/OmniTrustILM/cbom-repository/internal/health"
+	"github.com/OmniTrustILM/cbom-repository/internal/service"
 	"github.com/stretchr/testify/require"
 )
 

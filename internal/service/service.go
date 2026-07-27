@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"maps"
 	"slices"
@@ -13,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/log"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
+	"github.com/OmniTrustILM/cbom-repository/internal/log"
+	"github.com/OmniTrustILM/cbom-repository/internal/store"
 
 	"github.com/google/uuid"
 	jss "github.com/kaptinlin/jsonschema"
@@ -30,10 +31,44 @@ var (
 var schemas embed.FS
 
 // Please note: When you want to add a new schema version, please first
-// add the schema file into the `schemas` subdirectory in `interna/service`
+// add the schema file into the `schemas` subdirectory in `internal/service`
 // and then extend this variable with the mapping.
 var versionToEmbeddedFileMapping = map[string]string{
 	"1.6": "schemas/bom-1.6.schema.json",
+	"1.7": "schemas/bom-1.7.schema.json",
+}
+
+// subSchemaFiles are the CycloneDX sub-schemas referenced by the bom-*.schema.json
+// documents through relative `$ref`s (resolved against their `$id` base
+// http://cyclonedx.org/schema/...). They are vendored here and pre-registered with
+// the compiler so validation stays fully self-contained. If any of these were
+// missing, the compiler would try to fetch them from cyclonedx.org over the network;
+// New disables that (see noNetworkSchemaLoader) so a missing sub-schema fails loudly
+// instead of being silently downloaded — a download would make validation depend on
+// network reachability and, when unavailable, degrade to fail-open, accepting BOMs
+// that violate these sub-schemas (e.g. the 1.7 `algorithmFamily` and `ellipticCurves`
+// enums, SPDX license expressions, JSF signatures).
+//
+// Vendored from http://cyclonedx.org/schema/<file> (CycloneDX, Apache-2.0); see
+// internal/service/schemas/LICENSE and NOTICE.md for the license text and attribution.
+var subSchemaFiles = []string{
+	"schemas/spdx.schema.json",
+	"schemas/jsf-0.82.schema.json",
+	"schemas/cryptography-defs.schema.json",
+}
+
+// noNetworkSchemaLoader replaces the jsonschema compiler's default HTTP/HTTPS
+// loaders. Every CycloneDX sub-schema is vendored and pre-registered (see
+// subSchemaFiles), so external `$ref`s resolve from the compiler's cache and no
+// network fetch should ever be needed. If the compiler still reaches for a loader it
+// means a referenced schema is missing from the vendored set — so we log and return
+// an error instead of silently downloading it from cyclonedx.org. That keeps
+// validation independent of network reachability and prevents a fetched-over-the-wire
+// schema from masking a missing vendored file.
+func noNetworkSchemaLoader(url string) (io.ReadCloser, error) {
+	err := fmt.Errorf("refused to fetch schema %q over the network: all CycloneDX sub-schemas must be vendored in internal/service/schemas and listed in subSchemaFiles", url)
+	slog.Error("blocked network schema fetch during schema compilation", slog.String("url", url), slog.String("error", err.Error()))
+	return nil, err
 }
 
 type Config struct {
@@ -69,6 +104,30 @@ type Service struct {
 //   - error: Non-nil if any schema file cannot be read or compiled, nil otherwise
 func New(store store.Store, config Config) (Service, error) {
 
+	// Use a single compiler for all versions: the vendored sub-schemas are large
+	// (spdx.schema.json in particular), so compile and register them once under
+	// their `$id`, then resolve every bom schema's external `$ref`s from that
+	// cache — instead of re-compiling the sub-schemas per version. The bom schemas
+	// have distinct `$id`s, so sharing the compiler does not conflate versions.
+	compiler := jss.NewCompiler()
+
+	// Disable network schema resolution: swap the compiler's default HTTP/HTTPS
+	// loaders for one that errors out (see noNetworkSchemaLoader). Together with the
+	// vendored, pre-registered sub-schemas this guarantees validation never silently
+	// depends on cyclonedx.org being reachable; a missing sub-schema fails compilation
+	// here rather than being downloaded at startup.
+	compiler.RegisterLoader("http", noNetworkSchemaLoader)
+	compiler.RegisterLoader("https", noNetworkSchemaLoader)
+	for _, sub := range subSchemaFiles {
+		sb, err := schemas.ReadFile(sub)
+		if err != nil {
+			return Service{}, fmt.Errorf("failed to read embedded sub-schema %s: %w", sub, err)
+		}
+		if _, err := compiler.Compile(sb); err != nil {
+			return Service{}, fmt.Errorf("failed to compile embedded sub-schema %s: %w", sub, err)
+		}
+	}
+
 	jsonSchemas := make(map[string]*jss.Schema)
 	for version, filename := range versionToEmbeddedFileMapping {
 		b, err := schemas.ReadFile(filename)
@@ -76,11 +135,20 @@ func New(store store.Store, config Config) (Service, error) {
 			return Service{}, fmt.Errorf("failed to read embedded file %s: %w", filename, err)
 		}
 
-		compiler := jss.NewCompiler()
 		schema, err := compiler.Compile(b)
 		if err != nil {
-			return Service{}, fmt.Errorf("failed to compile schema: %w", err)
+			return Service{}, fmt.Errorf("failed to compile schema %s (version %s): %w", filename, version, err)
 		}
+
+		// Fail closed: any still-unresolved external reference would make
+		// validation silently fail-open (accept BOMs that violate the
+		// referenced sub-schema). Refuse to start rather than validate
+		// against an incomplete schema — this typically means a referenced
+		// sub-schema is missing from subSchemaFiles.
+		if unresolved := schema.UnresolvedReferenceURIs(); len(unresolved) > 0 {
+			return Service{}, fmt.Errorf("schema %s (version %s) has unresolved references (missing vendored sub-schema?): %v", filename, version, unresolved)
+		}
+
 		jsonSchemas[version] = schema
 	}
 

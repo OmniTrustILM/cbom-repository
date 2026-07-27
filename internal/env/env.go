@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/http"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/service"
-	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
+	"github.com/OmniTrustILM/cbom-repository/internal/http"
+	"github.com/OmniTrustILM/cbom-repository/internal/service"
+	"github.com/OmniTrustILM/cbom-repository/internal/store"
 
 	"github.com/kelseyhightower/envconfig"
 )

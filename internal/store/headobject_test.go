@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/CZERTAINLY/CBOM-Repository/internal/store"
-	mockS3 "github.com/CZERTAINLY/CBOM-Repository/internal/store/mock"
+	"github.com/OmniTrustILM/cbom-repository/internal/store"
+	mockS3 "github.com/OmniTrustILM/cbom-repository/internal/store/mock"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
