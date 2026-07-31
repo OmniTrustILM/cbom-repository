@@ -116,6 +116,10 @@ spec:
                   key: secret_key
             - name: APP_HTTP_PORT
               value: {{ .Values.service.port | quote }}
+            {{- if .Values.cbomRepo.corsAllowedOrigins }}
+            - name: APP_HTTP_CORS_ALLOWED_ORIGINS
+              value: {{ .Values.cbomRepo.corsAllowedOrigins | quote }}
+            {{- end }}
             - name: APP_LOG_LEVEL
               value: {{ .Values.logging.level | quote }}
             {{- if $httpProxy }}

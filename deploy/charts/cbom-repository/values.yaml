@@ -213,6 +213,24 @@ cbomRepo:
   usePathStyle: true
   accessKey: "minioadmin"
   secretKey: "minioadmin"
+  # Browser origins allowed full read and upload access cross-origin.
+  #
+  # What to put here: the address operators type into their browser to reach the
+  # ILM web console — scheme, host and, if non-standard, port. No path, no
+  # trailing slash. NOT the address of this service: the ILM console's JavaScript
+  # health-checks this service directly from the browser, and a browser only
+  # accepts the response if the page's own origin is listed here.
+  #
+  #   ILM console at https://ilm.example.net  ->  corsAllowedOrigins: "https://ilm.example.net"
+  #
+  # Several consoles (or a separate test hostname) go in one comma-separated list:
+  #   corsAllowedOrigins: "https://ilm.example.net,https://ilm-test.example.net"
+  #
+  # The URL in the `cbomRepositoryUrl` platform setting must also resolve from
+  # that same browser, or the check fails before CORS is even considered.
+  # Empty disables CORS; `*` allows any origin and is development-only, since
+  # this service has no auth of its own.
+  corsAllowedOrigins: ""
 
 minio:
   enabled: false

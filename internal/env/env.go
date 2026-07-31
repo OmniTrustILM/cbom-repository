@@ -2,7 +2,9 @@ package env
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 
 	"github.com/OmniTrustILM/cbom-repository/internal/http"
@@ -46,6 +48,26 @@ func New() (Config, error) {
 
 	if config.Http.MaxBodySize <= 0 {
 		return Config{}, errors.New("environment variable `APP_HTTP_MAX_BODY_SIZE` must be an integer greater than zero")
+	}
+
+	for _, origin := range config.Http.CORSAllowedOrigins {
+		origin = strings.TrimSpace(origin)
+		if origin == "" || origin == "*" {
+			continue
+		}
+
+		// A browser serializes Origin as exactly scheme://host[:port], so an
+		// entry is usable only if it already is that and nothing more. Compare
+		// against the canonical form rather than field by field: it also
+		// catches what individual fields leave invisible, such as the bare
+		// delimiters in `https://ilm.example.net?` and `https://ilm.example.net#`.
+		// The comparison ignores case, since matching does too.
+		u, err := url.Parse(origin)
+		if err != nil || u.Scheme == "" || u.Host == "" ||
+			!strings.EqualFold(origin, u.Scheme+"://"+u.Host) {
+			return Config{}, fmt.Errorf(
+				"environment variable `APP_HTTP_CORS_ALLOWED_ORIGINS` must list scheme://host[:port] entries or `*`, got %q", origin)
+		}
 	}
 
 	return config, nil

@@ -122,7 +122,42 @@ The following values may be configured:
 | cbomRepo.usePathStyle                        | `true`                      | Use path style for S3 storage access                                  |
 | cbomRepo.accessKey                           | `minioadmin`                | Access key for CBOM S3 storage                                        |
 | cbomRepo.secretKey                           | `minioadmin`                | Secret key for CBOM S3 storage                                        |
+| cbomRepo.corsAllowedOrigins                  | `""`                        | Origin of the ILM web console, e.g. `https://ilm.example.net` (§CORS) |
 | minio.enabled                                | `false`                     | Enable/disable embedded MinIO server                                  |
+
+##### CORS (`cbomRepo.corsAllowedOrigins`)
+
+Set this to the address operators type into their browser to reach the **ILM web
+console** — scheme, host, and port if it is non-standard. No path, no trailing
+slash. It is *not* the address of this service.
+
+```yaml
+# ILM console served at https://ilm.example.net
+cbomRepo:
+  corsAllowedOrigins: "https://ilm.example.net"
+```
+
+Several consoles go in one comma-separated list:
+
+```yaml
+  corsAllowedOrigins: "https://ilm.example.net,https://ilm-test.example.net"
+```
+
+The reason it is the console's address and not this one: the console's Settings
+page health-checks the CBOM repository from the operator's browser, and a browser
+only lets the page read the response if the page's own origin is listed here.
+Leave it empty and that check fails with a CORS error, showing a warning beside
+the configured URL even though the service is healthy.
+
+Two related requirements:
+
+- The `cbomRepositoryUrl` platform setting must resolve from that same browser
+  *and* from ILM Core, which calls this service server-side. An in-cluster name
+  such as `http://cbom-repository:8080` cannot be resolved by a browser, so the
+  warning stays no matter what is configured here — publish the service under a
+  name both can reach.
+- This service has no authentication of its own, so every listed origin gets full
+  read **and upload** access. `*` allows any origin and is for development only.
 
 #### Customization parameters
 
