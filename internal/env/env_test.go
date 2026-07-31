@@ -380,6 +380,35 @@ func TestNewFunc(t *testing.T) {
 				LogLevel: slog.LevelInfo,
 			},
 		},
+		"cors origins holding no actual origin start up cleanly": {
+			envVars: map[string]string{
+				"APP_S3_REGION":                 "eu-west-1",
+				"APP_S3_ENDPOINT":               "http://localhost:9000",
+				"APP_S3_BUCKET":                 "cbom-repository",
+				"APP_S3_ACCESS_KEY":             "minioadmin",
+				"APP_S3_SECRET_KEY":             "adminpassword",
+				"APP_S3_USE_PATH_STYLE":         "true",
+				"APP_HTTP_CORS_ALLOWED_ORIGINS": ",",
+			},
+			wantErr: false,
+			want: env.Config{
+				Store: store.Config{
+					Region:       "eu-west-1",
+					Endpoint:     "http://localhost:9000",
+					Bucket:       "cbom-repository",
+					AccessKey:    "minioadmin",
+					SecretKey:    "adminpassword",
+					UsePathStyle: true,
+				},
+				Http: http.Config{
+					Port:               8080,
+					Prefix:             "/api",
+					MaxBodySize:        20971520,
+					CORSAllowedOrigins: []string{"", ""},
+				},
+				LogLevel: slog.LevelInfo,
+			},
+		},
 		"cors origin with a query string is rejected": {
 			envVars: map[string]string{
 				"APP_S3_REGION":                 "eu-west-1",

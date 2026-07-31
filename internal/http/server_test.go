@@ -138,6 +138,16 @@ func TestCORSHeadersOnSimpleRequest(t *testing.T) {
 			wantVary:        "",
 		},
 		{
+			// `APP_HTTP_CORS_ALLOWED_ORIGINS=","` parses into entries that are
+			// all empty, which must leave CORS off rather than install a
+			// middleware that can never match an origin.
+			name:            "entries that are all blank keep cors disabled",
+			allowedOrigins:  []string{"", " "},
+			requestOrigin:   "http://localhost:8000",
+			wantAllowOrigin: "",
+			wantVary:        "",
+		},
+		{
 			name:            "allowed origin is echoed",
 			allowedOrigins:  []string{"http://localhost:8000"},
 			requestOrigin:   "http://localhost:8000",
@@ -242,6 +252,16 @@ func TestCORSPreflight(t *testing.T) {
 		{
 			name:            "cors disabled keeps the current 405 behavior",
 			allowedOrigins:  nil,
+			path:            "/api/v1/health",
+			wantStatus:      http.StatusMethodNotAllowed,
+			wantAllowOrigin: "",
+			wantMethods:     "",
+		},
+		{
+			// Blank entries carry no origin to allow, so the preflight route
+			// must stay unregistered and the 405 behavior must survive.
+			name:            "entries that are all blank keep the 405 behavior",
+			allowedOrigins:  []string{"", " "},
 			path:            "/api/v1/health",
 			wantStatus:      http.StatusMethodNotAllowed,
 			wantAllowOrigin: "",

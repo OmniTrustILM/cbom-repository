@@ -57,10 +57,12 @@ func New(cfg Config, svc service.Service, healthSvc health.Service) Server {
 func (s *Server) Handler() *mux.Router {
 	r := mux.NewRouter()
 
+	corsOrigins := usableCORSOrigins(s.cfg.CORSAllowedOrigins)
+
 	r.Use(maxBodySizeMiddleware(s.cfg.MaxBodySize))
 	r.Use(httpInfoContext)
-	if len(s.cfg.CORSAllowedOrigins) != 0 {
-		r.Use(corsMiddleware(s.cfg.CORSAllowedOrigins))
+	if len(corsOrigins) != 0 {
+		r.Use(corsMiddleware(corsOrigins))
 	}
 
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), s.Upload).Methods(http.MethodPost)
@@ -71,7 +73,7 @@ func (s *Server) Handler() *mux.Router {
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteHealthLive), s.LivenessHandler).Methods(http.MethodGet)
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteHealthReady), s.ReadinessHandler).Methods(http.MethodGet)
 
-	if len(s.cfg.CORSAllowedOrigins) != 0 {
+	if len(corsOrigins) != 0 {
 		// mux runs r.Use() middleware only for matched routes, so preflights
 		// need a route of their own or they fall through to the 405 handler
 		// with no CORS headers attached.
@@ -180,22 +182,35 @@ const (
 	corsMaxAge         = "600"
 )
 
+// usableCORSOrigins trims the configured origins and drops the blank ones, so
+// that a value carrying no actual origin — `" "`, or a stray `,` splitting into
+// empty entries — leaves CORS disabled instead of installing a middleware that
+// can never match.
+func usableCORSOrigins(configured []string) []string {
+	origins := make([]string, 0, len(configured))
+	for _, origin := range configured {
+		if origin = strings.TrimSpace(origin); origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+
+	return origins
+}
+
 // corsMiddleware answers cross-origin requests from the configured origins.
 // The ILM frontend health-checks this service directly from the operator's
-// browser, so its origin must be allowed to read responses.
+// browser, so its origin must be allowed to read responses. It expects the
+// origins to have been through usableCORSOrigins.
 func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 	allowed := make(map[string]struct{}, len(allowedOrigins))
 	wildcard := false
 	for _, origin := range allowedOrigins {
-		origin = strings.TrimSpace(origin)
-		switch origin {
-		case "":
-			continue
-		case "*":
+		if origin == "*" {
 			wildcard = true
-		default:
-			allowed[strings.ToLower(origin)] = struct{}{}
+			continue
 		}
+
+		allowed[strings.ToLower(origin)] = struct{}{}
 	}
 
 	return func(next http.Handler) http.Handler {
