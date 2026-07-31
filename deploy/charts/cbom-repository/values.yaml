@@ -213,6 +213,12 @@ cbomRepo:
   usePathStyle: true
   accessKey: "minioadmin"
   secretKey: "minioadmin"
+  # Browser origins allowed to read responses cross-origin. The ILM frontend
+  # health-checks this service from the operator's browser, so its origin
+  # belongs here; the URL in the `cbomRepositoryUrl` platform setting must also
+  # be reachable from that browser. Empty disables CORS.
+  # e.g. corsAllowedOrigins: "https://ilm.example.com"
+  corsAllowedOrigins: ""
 
 minio:
   enabled: false
