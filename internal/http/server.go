@@ -59,6 +59,9 @@ func (s *Server) Handler() *mux.Router {
 
 	r.Use(maxBodySizeMiddleware(s.cfg.MaxBodySize))
 	r.Use(httpInfoContext)
+	if len(s.cfg.CORSAllowedOrigins) != 0 {
+		r.Use(corsMiddleware(s.cfg.CORSAllowedOrigins))
+	}
 
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), s.Upload).Methods(http.MethodPost)
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteBOM), s.Search).Methods(http.MethodGet)
@@ -157,6 +160,54 @@ func maxBodySizeMiddleware(maxBytes int64) func(http.Handler) http.Handler {
 			r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 
 			// Continue to the next handler
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+const (
+	corsAllowedMethods = "GET, POST, OPTIONS"
+	corsAllowedHeaders = "Content-Type"
+	corsMaxAge         = "600"
+)
+
+// corsMiddleware answers cross-origin requests from the configured origins.
+// The ILM frontend health-checks this service directly from the operator's
+// browser, so its origin must be allowed to read responses.
+func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
+	allowed := make(map[string]struct{}, len(allowedOrigins))
+	wildcard := false
+	for _, origin := range allowedOrigins {
+		origin = strings.TrimSpace(origin)
+		switch origin {
+		case "":
+			continue
+		case "*":
+			wildcard = true
+		default:
+			allowed[strings.ToLower(origin)] = struct{}{}
+		}
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			// The response depends on the request origin even when it is
+			// rejected, so caches must key on it either way.
+			w.Header().Add("Vary", "Origin")
+
+			if _, ok := allowed[strings.ToLower(origin)]; ok || wildcard {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Methods", corsAllowedMethods)
+				w.Header().Set("Access-Control-Allow-Headers", corsAllowedHeaders)
+				w.Header().Set("Access-Control-Max-Age", corsMaxAge)
+			}
+
 			next.ServeHTTP(w, r)
 		})
 	}
