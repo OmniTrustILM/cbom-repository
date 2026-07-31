@@ -409,6 +409,71 @@ func TestNewFunc(t *testing.T) {
 				LogLevel: slog.LevelInfo,
 			},
 		},
+		"cors origin with a bare query delimiter is rejected": {
+			envVars: map[string]string{
+				"APP_S3_REGION":                 "eu-west-1",
+				"APP_S3_ENDPOINT":               "http://localhost:9000",
+				"APP_S3_BUCKET":                 "cbom-repository",
+				"APP_S3_ACCESS_KEY":             "minioadmin",
+				"APP_S3_SECRET_KEY":             "adminpassword",
+				"APP_S3_USE_PATH_STYLE":         "true",
+				"APP_HTTP_CORS_ALLOWED_ORIGINS": "https://ilm.example.net?",
+			},
+			wantErr: true,
+		},
+		"cors origin with a bare fragment delimiter is rejected": {
+			envVars: map[string]string{
+				"APP_S3_REGION":                 "eu-west-1",
+				"APP_S3_ENDPOINT":               "http://localhost:9000",
+				"APP_S3_BUCKET":                 "cbom-repository",
+				"APP_S3_ACCESS_KEY":             "minioadmin",
+				"APP_S3_SECRET_KEY":             "adminpassword",
+				"APP_S3_USE_PATH_STYLE":         "true",
+				"APP_HTTP_CORS_ALLOWED_ORIGINS": "https://ilm.example.net#",
+			},
+			wantErr: true,
+		},
+		"cors origin with a trailing slash is rejected": {
+			envVars: map[string]string{
+				"APP_S3_REGION":                 "eu-west-1",
+				"APP_S3_ENDPOINT":               "http://localhost:9000",
+				"APP_S3_BUCKET":                 "cbom-repository",
+				"APP_S3_ACCESS_KEY":             "minioadmin",
+				"APP_S3_SECRET_KEY":             "adminpassword",
+				"APP_S3_USE_PATH_STYLE":         "true",
+				"APP_HTTP_CORS_ALLOWED_ORIGINS": "https://ilm.example.net/",
+			},
+			wantErr: true,
+		},
+		"cors origin with an uppercase scheme is accepted": {
+			envVars: map[string]string{
+				"APP_S3_REGION":                 "eu-west-1",
+				"APP_S3_ENDPOINT":               "http://localhost:9000",
+				"APP_S3_BUCKET":                 "cbom-repository",
+				"APP_S3_ACCESS_KEY":             "minioadmin",
+				"APP_S3_SECRET_KEY":             "adminpassword",
+				"APP_S3_USE_PATH_STYLE":         "true",
+				"APP_HTTP_CORS_ALLOWED_ORIGINS": "HTTP://LocalHost:8000",
+			},
+			wantErr: false,
+			want: env.Config{
+				Store: store.Config{
+					Region:       "eu-west-1",
+					Endpoint:     "http://localhost:9000",
+					Bucket:       "cbom-repository",
+					AccessKey:    "minioadmin",
+					SecretKey:    "adminpassword",
+					UsePathStyle: true,
+				},
+				Http: http.Config{
+					Port:               8080,
+					Prefix:             "/api",
+					MaxBodySize:        20971520,
+					CORSAllowedOrigins: []string{"HTTP://LocalHost:8000"},
+				},
+				LogLevel: slog.LevelInfo,
+			},
+		},
 		"cors origin with a query string is rejected": {
 			envVars: map[string]string{
 				"APP_S3_REGION":                 "eu-west-1",

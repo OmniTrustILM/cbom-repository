@@ -271,8 +271,7 @@ func TestCORSPreflight(t *testing.T) {
 			// The catch-all preflight route matches any path, registered or
 			// not, so an OPTIONS to a nonexistent path also gets a 204 with
 			// CORS headers instead of the problem+json 404 the
-			// NotFoundHandler would otherwise produce. This is deliberate;
-			// pin it so a later change cannot silently narrow it.
+			// NotFoundHandler would otherwise produce.
 			name:            "preflight on an unregistered path is still answered",
 			allowedOrigins:  []string{"http://localhost:8000"},
 			path:            "/api/v1/not-a-real-path",

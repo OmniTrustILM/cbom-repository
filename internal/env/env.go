@@ -56,8 +56,15 @@ func New() (Config, error) {
 			continue
 		}
 
+		// A browser serializes Origin as exactly scheme://host[:port], so an
+		// entry is usable only if it already is that and nothing more. Compare
+		// against the canonical form rather than field by field: it also
+		// catches what individual fields leave invisible, such as the bare
+		// delimiters in `https://ilm.example.net?` and `https://ilm.example.net#`.
+		// The comparison ignores case, since matching does too.
 		u, err := url.Parse(origin)
-		if err != nil || u.Scheme == "" || u.Host == "" || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+		if err != nil || u.Scheme == "" || u.Host == "" ||
+			!strings.EqualFold(origin, u.Scheme+"://"+u.Host) {
 			return Config{}, fmt.Errorf(
 				"environment variable `APP_HTTP_CORS_ALLOWED_ORIGINS` must list scheme://host[:port] entries or `*`, got %q", origin)
 		}
