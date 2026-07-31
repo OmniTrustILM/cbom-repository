@@ -71,6 +71,15 @@ func (s *Server) Handler() *mux.Router {
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteHealthLive), s.LivenessHandler).Methods(http.MethodGet)
 	r.HandleFunc(fmt.Sprintf("%s%s", s.cfg.Prefix, RouteHealthReady), s.ReadinessHandler).Methods(http.MethodGet)
 
+	if len(s.cfg.CORSAllowedOrigins) != 0 {
+		// mux runs r.Use() middleware only for matched routes, so preflights
+		// need a route of their own or they fall through to the 405 handler
+		// with no CORS headers attached.
+		r.PathPrefix("/").Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNoContent)
+		})
+	}
+
 	r.NotFoundHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("Received an HTTP request for an unmapped path and method.",
 			slog.String("path", r.URL.Path), slog.String("method", r.Method))

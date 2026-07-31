@@ -198,3 +198,75 @@ func TestCORSHeadersOnSimpleRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestCORSPreflight(t *testing.T) {
+	tests := []struct {
+		name            string
+		allowedOrigins  []string
+		path            string
+		wantStatus      int
+		wantAllowOrigin string
+		wantMethods     string
+	}{
+		{
+			name:            "allowed origin preflight is answered",
+			allowedOrigins:  []string{"http://localhost:8000"},
+			path:            "/api/v1/health",
+			wantStatus:      http.StatusNoContent,
+			wantAllowOrigin: "http://localhost:8000",
+			wantMethods:     "GET, POST, OPTIONS",
+		},
+		{
+			name:            "upload endpoint preflight is answered",
+			allowedOrigins:  []string{"http://localhost:8000"},
+			path:            "/api/v1/bom",
+			wantStatus:      http.StatusNoContent,
+			wantAllowOrigin: "http://localhost:8000",
+			wantMethods:     "GET, POST, OPTIONS",
+		},
+		{
+			name:            "unlisted origin preflight carries no allow header",
+			allowedOrigins:  []string{"http://localhost:8000"},
+			path:            "/api/v1/health",
+			wantStatus:      http.StatusNoContent,
+			wantAllowOrigin: "",
+			wantMethods:     "",
+		},
+		{
+			name:            "cors disabled keeps the current 405 behavior",
+			allowedOrigins:  nil,
+			path:            "/api/v1/health",
+			wantStatus:      http.StatusMethodNotAllowed,
+			wantAllowOrigin: "",
+			wantMethods:     "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			requestOrigin := "http://localhost:8000"
+			if tt.wantAllowOrigin == "" && len(tt.allowedOrigins) != 0 {
+				requestOrigin = "http://attacker.example"
+			}
+
+			cfg := Config{
+				Port:               8080,
+				Prefix:             "/api",
+				MaxBodySize:        20971520,
+				CORSAllowedOrigins: tt.allowedOrigins,
+			}
+			storageChecker := mockChecker{name: "storage", status: health.StatusUp, details: map[string]any{"latencyMs": 1}}
+			server := New(cfg, service.Service{}, health.NewService(storageChecker))
+
+			req := httptest.NewRequest(http.MethodOptions, tt.path, nil)
+			req.Header.Set("Origin", requestOrigin)
+			req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+			rec := httptest.NewRecorder()
+			server.Handler().ServeHTTP(rec, req)
+
+			require.Equal(t, tt.wantStatus, rec.Code)
+			require.Equal(t, tt.wantAllowOrigin, rec.Header().Get("Access-Control-Allow-Origin"))
+			require.Equal(t, tt.wantMethods, rec.Header().Get("Access-Control-Allow-Methods"))
+		})
+	}
+}
