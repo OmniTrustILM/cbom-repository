@@ -122,6 +122,7 @@ The following values may be configured:
 | cbomRepo.usePathStyle                        | `true`                      | Use path style for S3 storage access                                  |
 | cbomRepo.accessKey                           | `minioadmin`                | Access key for CBOM S3 storage                                        |
 | cbomRepo.secretKey                           | `minioadmin`                | Secret key for CBOM S3 storage                                        |
+| cbomRepo.corsAllowedOrigins                  | `""`                        | Comma-separated origins allowed CORS read/upload; empty disables it   |
 | minio.enabled                                | `false`                     | Enable/disable embedded MinIO server                                  |
 
 #### Customization parameters

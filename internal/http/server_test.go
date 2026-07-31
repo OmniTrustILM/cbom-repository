@@ -166,6 +166,13 @@ func TestCORSHeadersOnSimpleRequest(t *testing.T) {
 			wantVary:        "Origin",
 		},
 		{
+			name:            "allowed origin entry with surrounding whitespace still matches",
+			allowedOrigins:  []string{" http://localhost:8000 "},
+			requestOrigin:   "http://localhost:8000",
+			wantAllowOrigin: "http://localhost:8000",
+			wantVary:        "Origin",
+		},
+		{
 			name:            "same-origin request without an origin header is untouched",
 			allowedOrigins:  []string{"http://localhost:8000"},
 			requestOrigin:   "",
@@ -239,6 +246,19 @@ func TestCORSPreflight(t *testing.T) {
 			wantStatus:      http.StatusMethodNotAllowed,
 			wantAllowOrigin: "",
 			wantMethods:     "",
+		},
+		{
+			// The catch-all preflight route matches any path, registered or
+			// not, so an OPTIONS to a nonexistent path also gets a 204 with
+			// CORS headers instead of the problem+json 404 the
+			// NotFoundHandler would otherwise produce. This is deliberate;
+			// pin it so a later change cannot silently narrow it.
+			name:            "preflight on an unregistered path is still answered",
+			allowedOrigins:  []string{"http://localhost:8000"},
+			path:            "/api/v1/not-a-real-path",
+			wantStatus:      http.StatusNoContent,
+			wantAllowOrigin: "http://localhost:8000",
+			wantMethods:     "GET, POST, OPTIONS",
 		},
 	}
 

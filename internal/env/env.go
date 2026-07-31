@@ -51,12 +51,13 @@ func New() (Config, error) {
 	}
 
 	for _, origin := range config.Http.CORSAllowedOrigins {
-		if origin == "*" {
+		origin = strings.TrimSpace(origin)
+		if origin == "" || origin == "*" {
 			continue
 		}
 
 		u, err := url.Parse(origin)
-		if err != nil || u.Scheme == "" || u.Host == "" || u.Path != "" {
+		if err != nil || u.Scheme == "" || u.Host == "" || u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
 			return Config{}, fmt.Errorf(
 				"environment variable `APP_HTTP_CORS_ALLOWED_ORIGINS` must list scheme://host[:port] entries or `*`, got %q", origin)
 		}
