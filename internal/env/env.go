@@ -2,7 +2,9 @@ package env
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 
 	"github.com/OmniTrustILM/cbom-repository/internal/http"
@@ -46,6 +48,18 @@ func New() (Config, error) {
 
 	if config.Http.MaxBodySize <= 0 {
 		return Config{}, errors.New("environment variable `APP_HTTP_MAX_BODY_SIZE` must be an integer greater than zero")
+	}
+
+	for _, origin := range config.Http.CORSAllowedOrigins {
+		if origin == "*" {
+			continue
+		}
+
+		u, err := url.Parse(origin)
+		if err != nil || u.Scheme == "" || u.Host == "" || u.Path != "" {
+			return Config{}, fmt.Errorf(
+				"environment variable `APP_HTTP_CORS_ALLOWED_ORIGINS` must list scheme://host[:port] entries or `*`, got %q", origin)
+		}
 	}
 
 	return config, nil

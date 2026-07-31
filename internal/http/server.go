@@ -29,6 +29,10 @@ type Config struct {
 	Prefix string `envconfig:"APP_HTTP_PREFIX" default:"/api"`
 	// default HTTP request body size is 20 MiB
 	MaxBodySize int64 `envconfig:"APP_HTTP_MAX_BODY_SIZE" default:"20971520"`
+	// CORSAllowedOrigins lists browser origins permitted to read responses
+	// cross-origin, e.g. the ILM frontend that health-checks this service
+	// from the operator's browser. Empty (the default) disables CORS.
+	CORSAllowedOrigins []string `envconfig:"APP_HTTP_CORS_ALLOWED_ORIGINS"`
 }
 
 type Server struct {
