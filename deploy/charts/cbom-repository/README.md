@@ -28,7 +28,7 @@ kubectl create namespace ilm
 
 Copy the default `values.yaml` from the Helm chart and modify the values accordingly:
 ```bash
-helm show values oci://harbor.3key.company/czertainly-helm/cbom-repository > values.yaml
+helm show values oci://hub.omnitrustregistry.com/ilm-helm/cbom-repository > values.yaml
 ```
 Now edit the `values.yaml` according to your desired state, see [Configurable parameters](#configurable-parameters) for more information.
 
@@ -36,7 +36,7 @@ Now edit the `values.yaml` according to your desired state, see [Configurable pa
 
 For the basic installation, run:
 ```bash
-helm install --namespace ilm -f values.yaml ilm-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
+helm install --namespace ilm -f values.yaml ilm-cbom-repository oci://hub.omnitrustregistry.com/ilm-helm/cbom-repository
 ```
 
 **Save your configuration**
@@ -50,7 +50,7 @@ Always make sure you save the `values.yaml` and all `--set` and `--set-file` opt
 
 For upgrading the installation, update your configuration and run:
 ```bash
-helm upgrade --namespace ilm -f values.yaml ilm-cbom-repository oci://harbor.3key.company/czertainly-helm/cbom-repository
+helm upgrade --namespace ilm -f values.yaml ilm-cbom-repository oci://hub.omnitrustregistry.com/ilm-helm/cbom-repository
 ```
 
 ### Uninstall
@@ -98,8 +98,8 @@ The following values may be configured:
 | httpProxy                                    | `""`                        | Proxy to be used to access external resources through http            |
 | httpsProxy                                   | `""`                        | Proxy to be used to access external resources through https           |
 | noProxy                                      | `""`                        | Defines list of external resources that should not use proxy settings |
-| image.registry                               | `docker.io`                 | Docker registry name for the image                                    |
-| image.repository                             | `czertainly`                | Docker image repository name                                          |
+| image.registry                               | `hub.omnitrustregistry.com` | Docker registry name for the image                                    |
+| image.repository                             | `ilm`                       | Docker image repository name                                          |
 | image.name                                   | `cbom-repository`           | Docker image name                                                     |
 | image.tag                                    | `1.0.0`                     | Docker image tag                                                      |
 | image.digest                                 | `""`                        | Docker image digest, will override tag if specified                   |

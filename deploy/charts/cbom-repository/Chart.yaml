@@ -7,10 +7,10 @@ description: A Helm chart for CBOM Repository.
 home: https://github.com/OmniTrustILM/cbom-repository
 icon: https://github.com/OmniTrustILM.png
 dependencies:
-  - name: czertainly-lib
-    repository: oci://harbor.3key.company/czertainly-helm
-    # repository: file://../czertainly-lib
-    version: 1.4.2
+  - name: ilm-lib
+    repository: oci://hub.omnitrustregistry.com/ilm-helm
+    # repository: file://../ilm-lib
+    version: 1.4.2-1
 keywords:
   - ilm
   - trust
