@@ -39,7 +39,8 @@ type BOMCreated struct {
 //     already exists.
 //
 // Cryptographic asset statistics are calculated for all uploaded BOMs and stored
-// as metadata alongside the BOM document.
+// as metadata alongside the BOM document, together with the counting-algorithm
+// version (CryptoStatsVersion).
 //
 // Parameters:
 //   - ctx: Context for cancellation, deadlines and additional slog fields.
@@ -163,8 +164,9 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 
 	// store the original unchanged BOM
 	metaOriginal := store.Metadata{
-		Version:     "original",
-		CryptoStats: cryptoStats,
+		Version:            "original",
+		CryptoStats:        cryptoStats,
+		CryptoStatsVersion: CryptoStatsVersion,
 	}
 	if err := s.store.Upload(ctx, uploadKeyOriginal(bom.SerialNumber), metaOriginal, orig.Bytes()); err != nil {
 		return BOMCreated{}, err
@@ -173,8 +175,9 @@ func (s Service) uploadCaseSNInvalid(ctx context.Context, bom cdx.BOM, orig byte
 
 	// store the modified BOM with serialNumber and version set
 	meta := store.Metadata{
-		Version:     fmt.Sprintf("%d", bom.Version),
-		CryptoStats: cryptoStats,
+		Version:            fmt.Sprintf("%d", bom.Version),
+		CryptoStats:        cryptoStats,
+		CryptoStatsVersion: CryptoStatsVersion,
 	}
 
 	var modifiedBuf bytes.Buffer
@@ -214,8 +217,9 @@ func (s Service) uploadCaseSNValidVersionInvalid(ctx context.Context, bom cdx.BO
 	}
 
 	meta := store.Metadata{
-		Version:     fmt.Sprintf("%d", bom.Version),
-		CryptoStats: cryptoStats,
+		Version:            fmt.Sprintf("%d", bom.Version),
+		CryptoStats:        cryptoStats,
+		CryptoStatsVersion: CryptoStatsVersion,
 	}
 
 	var modifiedBuf bytes.Buffer
@@ -249,8 +253,9 @@ func (s Service) uploadCaseSNValidVersionValid(ctx context.Context, bom cdx.BOM,
 	}
 
 	meta := store.Metadata{
-		Version:     fmt.Sprintf("%d", bom.Version),
-		CryptoStats: cryptoStats,
+		Version:            fmt.Sprintf("%d", bom.Version),
+		CryptoStats:        cryptoStats,
+		CryptoStatsVersion: CryptoStatsVersion,
 	}
 
 	if err := s.store.Upload(ctx, uploadKey(bom.SerialNumber, bom.Version), meta, orig.Bytes()); err != nil {
