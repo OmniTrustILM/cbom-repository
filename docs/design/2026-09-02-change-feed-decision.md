@@ -306,6 +306,8 @@ The deferred operator tool (follow-up issue 6) would read each object, recompute
 
 ## 12. Follow-up issues
 
+> Filed 2026-09-03: draft 1 → [cbom-repository#144](https://github.com/OmniTrustILM/cbom-repository/issues/144); draft 2 → [core#2208](https://github.com/OmniTrustILM/core/issues/2208); draft 3 → [core#2209](https://github.com/OmniTrustILM/core/issues/2209); draft 4 → proposal posted on [#26](https://github.com/OmniTrustILM/cbom-repository/issues/26#issuecomment-5526007414) (title and body unchanged pending the Tech Lead's decision); draft 5 → disposition posted on [#27](https://github.com/OmniTrustILM/cbom-repository/issues/27#issuecomment-5526007717) (left open for the Tech Lead); draft 6 → [cbom-repository#145](https://github.com/OmniTrustILM/cbom-repository/issues/145) (deferred).
+
 Drafted, not posted, in [2026-09-02-change-feed-follow-up-issues.md](./2026-09-02-change-feed-follow-up-issues.md):
 
 1. cbom-repository: keyset cursor for `GET /v1/bom` (option (a)).
