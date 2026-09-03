@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -775,4 +776,92 @@ func TestMaxBodySizeMiddleware(t *testing.T) {
 			require.Equal(t, tt.expectedStatus, w.Code)
 		})
 	}
+}
+
+func TestSearch_LimitValidation(t *testing.T) {
+	tests := []struct {
+		name           string
+		query          string
+		expectList     bool
+		expectedStatus int
+		expectedDetail string
+	}{
+		{name: "absent limit is legacy mode", query: "after=1672531200", expectList: true, expectedStatus: http.StatusOK},
+		{name: "limit lower bound", query: "after=1672531200&limit=1", expectList: true, expectedStatus: http.StatusOK},
+		{name: "limit upper bound", query: "after=1672531200&limit=1000", expectList: true, expectedStatus: http.StatusOK},
+		{name: "limit zero", query: "after=1672531200&limit=0", expectedStatus: http.StatusBadRequest, expectedDetail: "query parameter 'limit' must be an integer between 1 and 1000"},
+		{name: "limit negative", query: "after=1672531200&limit=-3", expectedStatus: http.StatusBadRequest, expectedDetail: "query parameter 'limit' must be an integer between 1 and 1000"},
+		{name: "limit above maximum is rejected, not clamped", query: "after=1672531200&limit=1001", expectedStatus: http.StatusBadRequest, expectedDetail: "query parameter 'limit' must be an integer between 1 and 1000"},
+		{name: "limit not an integer", query: "after=1672531200&limit=ten", expectedStatus: http.StatusBadRequest, expectedDetail: "query parameter 'limit' must be an integer between 1 and 1000"},
+		{name: "limit present but empty", query: "after=1672531200&limit=", expectedStatus: http.StatusBadRequest, expectedDetail: "query parameter 'limit' must be an integer between 1 and 1000"},
+		{name: "after is validated before limit", query: "limit=5", expectedStatus: http.StatusBadRequest, expectedDetail: "query parameter 'after' must not be empty"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			s3Mock := mockS3.NewMockS3Contract(ctrl)
+			if tt.expectList {
+				s3Mock.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{}, nil)
+			}
+			svc, err := service.New(store.New(store.Config{Bucket: "bucket"}, s3Mock, nil), service.Config{})
+			require.NoError(t, err)
+			server := New(Config{Prefix: "/api"}, svc, health.NewService(mockChecker{name: "storage", status: health.StatusUp}))
+
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/bom?"+tt.query, nil)
+			w := httptest.NewRecorder()
+			server.Handler().ServeHTTP(w, req)
+
+			require.Equal(t, tt.expectedStatus, w.Code)
+			if tt.expectedStatus == http.StatusOK {
+				require.JSONEq(t, "[]", w.Body.String())
+				return
+			}
+			require.Equal(t, "application/problem+json", w.Header().Get("Content-Type"))
+			var p pd.Problem
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &p))
+			require.Contains(t, p.Detail, tt.expectedDetail)
+		})
+	}
+}
+
+// The limit reaches the service: three objects in three seconds, limit=2 → two entries,
+// oldest first.
+func TestSearch_LimitIsApplied(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	base := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Mock.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+		Contents: []types.Object{
+			{Key: aws.String("urn:uuid:c-1"), LastModified: aws.Time(base.Add(3 * time.Second))},
+			{Key: aws.String("urn:uuid:a-1"), LastModified: aws.Time(base.Add(1 * time.Second))},
+			{Key: aws.String("urn:uuid:b-1"), LastModified: aws.Time(base.Add(2 * time.Second))},
+		},
+	}, nil)
+	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, in *s3.HeadObjectInput, _ ...func(*s3.Options)) (*s3.HeadObjectOutput, error) {
+			when := map[string]time.Time{"urn:uuid:a-1": base.Add(1 * time.Second), "urn:uuid:b-1": base.Add(2 * time.Second)}[aws.ToString(in.Key)]
+			return &s3.HeadObjectOutput{
+				ContentLength: aws.Int64(1), ContentType: aws.String("application/json"), LastModified: aws.Time(when),
+				Metadata: map[string]string{store.MetaCryptoStatsKey: "{}"},
+			}, nil
+		}).Times(2)
+
+	svc, err := service.New(store.New(store.Config{Bucket: "bucket"}, s3Mock, nil), service.Config{})
+	require.NoError(t, err)
+	server := New(Config{Prefix: "/api"}, svc, health.NewService(mockChecker{name: "storage", status: health.StatusUp}))
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/v1/bom?after=%d&limit=2", base.Unix()), nil)
+	w := httptest.NewRecorder()
+	server.Handler().ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var response []service.SearchRes
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
+	require.Len(t, response, 2)
+	require.Equal(t, "urn:uuid:a", response[0].SerialNumber)
+	require.Equal(t, "urn:uuid:b", response[1].SerialNumber)
 }

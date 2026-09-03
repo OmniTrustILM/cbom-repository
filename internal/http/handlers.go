@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -156,9 +157,14 @@ func (h Server) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.InfoContext(ctx, "Start.", slog.String("after", after))
+	limit, ok := parseSearchLimit(w, r.URL.Query())
+	if !ok {
+		return
+	}
 
-	resp, err := h.service.Search(ctx, i)
+	slog.InfoContext(ctx, "Start.", slog.String("after", after), slog.Int("limit", limit))
+
+	resp, err := h.service.Search(ctx, i, limit)
 	if err != nil {
 		internal(w, fmt.Sprintf("Failed to get the requested BOM: %s.", err))
 		return
@@ -171,4 +177,19 @@ func (h Server) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	slog.InfoContext(ctx, "Finished.", slog.Int("response-count", len(resp)))
+}
+
+// parseSearchLimit reads the optional `limit` query parameter of GET /v1/bom. Absent
+// means legacy, unpaged behaviour (0). When present — even empty — it must be an integer
+// in [1, service.MaxSearchLimit]; otherwise a 400 problem is written and ok is false.
+func parseSearchLimit(w http.ResponseWriter, query url.Values) (limit int, ok bool) {
+	if !query.Has("limit") {
+		return 0, true
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(query.Get("limit")))
+	if err != nil || n < 1 || n > service.MaxSearchLimit {
+		badrequest(w, fmt.Sprintf("Request validation failed, query parameter 'limit' must be an integer between 1 and %d.", service.MaxSearchLimit))
+		return 0, false
+	}
+	return n, true
 }

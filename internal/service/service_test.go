@@ -1,7 +1,10 @@
 package service_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -75,11 +78,100 @@ func TestSearch_Success(t *testing.T) {
 	svc, err := service.New(st, service.Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
-	res, err := svc.Search(context.Background(), now.Unix()-1)
+	res, err := svc.Search(context.Background(), now.Unix()-1, 0)
 	require.NoError(t, err)
 	require.Len(t, res, 2)
 	require.Equal(t, "urn:uuid:1", res[0].SerialNumber)
 	require.Equal(t, "1", res[0].Version)
+}
+
+// A HEAD 404 for one listed key skips only that object (legacy mode); the call still
+// succeeds and returns the remaining entries.
+func TestSearch_LegacyHeadNotFoundSkipsObject(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	now := time.Now()
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Mock.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+		Contents: []types.Object{
+			{Key: awsString("urn:uuid:1-1"), LastModified: &now},
+			{Key: awsString("urn:uuid:2-1"), LastModified: &now},
+		},
+	}, nil)
+	s3Mock.EXPECT().HeadObject(gomock.Any(), &s3.HeadObjectInput{
+		Bucket: aws.String("bucket"),
+		Key:    aws.String("urn:uuid:1-1"),
+	}).Return(nil, &types.NotFound{})
+	s3Mock.EXPECT().HeadObject(gomock.Any(), &s3.HeadObjectInput{
+		Bucket: aws.String("bucket"),
+		Key:    aws.String("urn:uuid:2-1"),
+	}).Return(&s3.HeadObjectOutput{
+		ContentLength: aws.Int64(1),
+		ContentType:   aws.String("application/json"),
+		LastModified:  &now,
+		Metadata: map[string]string{
+			store.MetaCryptoStatsKey: "{}",
+		},
+	}, nil)
+
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
+	svc, err := service.New(st, service.Config{})
+	require.NoError(t, err)
+
+	res, err := svc.Search(context.Background(), now.Unix()-1, 0)
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	require.Equal(t, "urn:uuid:2", res[0].SerialNumber)
+}
+
+// A HEAD error other than not-found fails the whole call (legacy mode): the page would
+// otherwise silently omit an object the caller cannot tell apart from one that simply
+// does not exist.
+func TestSearch_LegacyHeadErrorFailsCall(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	now := time.Now()
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Mock.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+		Contents: []types.Object{{Key: awsString("urn:uuid:1-1"), LastModified: &now}},
+	}, nil)
+	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return(nil, errors.New("boom"))
+
+	st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
+	svc, err := service.New(st, service.Config{})
+	require.NoError(t, err)
+
+	_, err = svc.Search(context.Background(), now.Unix()-1, 0)
+	require.Error(t, err)
+}
+
+// A ListObjectsV2 failure fails Search, in either mode: the error surfaces before the
+// legacy/paged branch is chosen.
+func TestSearch_ListErrorFailsCall(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		limit int
+	}{
+		{"legacy", 0},
+		{"paged", 5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			s3Mock := mockS3.NewMockS3Contract(ctrl)
+			s3Mock.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, errors.New("boom"))
+
+			st := store.New(store.Config{Bucket: "bucket"}, s3Mock, nil)
+			svc, err := service.New(st, service.Config{})
+			require.NoError(t, err)
+
+			_, err = svc.Search(context.Background(), 0, tc.limit)
+			require.Error(t, err)
+		})
+	}
 }
 
 func TestSearch_BadKey(t *testing.T) {
@@ -96,7 +188,7 @@ func TestSearch_BadKey(t *testing.T) {
 	svc, err := service.New(st, service.Config{CheckOnFetch: false})
 	require.NoError(t, err)
 
-	_, err = svc.Search(context.Background(), now.Unix()-1)
+	_, err = svc.Search(context.Background(), now.Unix()-1, 0)
 	require.Error(t, err)
 }
 
@@ -205,3 +297,105 @@ func TestGetBOMByUrn_Success_CheckOnFetchTrue(t *testing.T) {
 
 // helper to create *string for aws types
 func awsString(s string) *string { return &s }
+
+// Pins the legacy wire format byte for byte: field names (`created_at`, not
+// `timestamp`), field order and encoding are what Core's client sees today. The
+// handler encodes with json.NewEncoder exactly like this test does.
+func TestSearch_LegacyEntryJSONIsByteCompatible(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	when := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Mock.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+		Contents: []types.Object{{Key: awsString("urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79-1"), LastModified: &when}},
+	}, nil)
+	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return(&s3.HeadObjectOutput{
+		ContentLength: aws.Int64(1),
+		ContentType:   aws.String("application/json"),
+		LastModified:  &when,
+		Metadata: map[string]string{
+			store.MetaCryptoStatsKey: `{"cryptoAssets":{"total":3,"algorithms":{"total":1},"certificates":{"total":1},"protocols":{"total":1},"relatedCryptoMaterials":{"total":0}}}`,
+		},
+	}, nil)
+
+	svc, err := service.New(store.New(store.Config{Bucket: "bucket"}, s3Mock, nil), service.Config{})
+	require.NoError(t, err)
+
+	res, err := svc.Search(context.Background(), when.Unix()-1, 0)
+	require.NoError(t, err)
+
+	var buf bytes.Buffer
+	require.NoError(t, json.NewEncoder(&buf).Encode(res))
+	want := `[{"serialNumber":"urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79","version":"1","created_at":"2024-01-01T12:00:00Z","cryptoStats":{"cryptoAssets":{"total":3,"algorithms":{"total":1},"certificates":{"total":1},"protocols":{"total":1},"relatedCryptoMaterials":{"total":0}}}}]` + "\n"
+	require.Equal(t, want, buf.String())
+}
+
+// An object without crypto-stats metadata is returned — visible, with a warning and
+// null statistics — instead of being silently dropped from the feed.
+func TestSearch_MissingStatsMetadataIsVisibleWithWarning(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	when := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Mock.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+		Contents: []types.Object{{Key: awsString("urn:uuid:1-1"), LastModified: &when}},
+	}, nil)
+	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return(&s3.HeadObjectOutput{
+		ContentLength: aws.Int64(1), ContentType: aws.String("application/json"), LastModified: &when,
+		Metadata: map[string]string{store.MetaVersionKey: "1"},
+	}, nil)
+
+	svc, err := service.New(store.New(store.Config{Bucket: "bucket"}, s3Mock, nil), service.Config{})
+	require.NoError(t, err)
+
+	res, err := svc.Search(context.Background(), when.Unix()-1, 0)
+	require.NoError(t, err)
+	require.Equal(t, []service.SearchRes{{
+		SerialNumber: "urn:uuid:1",
+		Version:      "1",
+		Timestamp:    "2024-01-01T12:00:00Z",
+		CryptoStats:  nil,
+		Warnings:     []string{service.WarningCryptoStatsMissing},
+	}}, res)
+
+	var buf bytes.Buffer
+	require.NoError(t, json.NewEncoder(&buf).Encode(res))
+	require.Equal(t, `[{"serialNumber":"urn:uuid:1","version":"1","created_at":"2024-01-01T12:00:00Z","cryptoStats":null,"warnings":["crypto-stats-missing"]}]`+"\n", buf.String())
+}
+
+// Corrupt crypto-stats metadata on one object must not take the whole feed down with a
+// 500; the object is returned with a warning and the other entries are unaffected.
+func TestSearch_InvalidStatsMetadataIsVisibleWithWarning(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	when := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Mock.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+		Contents: []types.Object{
+			{Key: awsString("urn:uuid:1-1"), LastModified: &when},
+			{Key: awsString("urn:uuid:2-1"), LastModified: &when},
+		},
+	}, nil)
+	s3Mock.EXPECT().HeadObject(gomock.Any(), &s3.HeadObjectInput{Bucket: aws.String("bucket"), Key: aws.String("urn:uuid:1-1")}).Return(&s3.HeadObjectOutput{
+		ContentLength: aws.Int64(1), ContentType: aws.String("application/json"), LastModified: &when,
+		Metadata: map[string]string{store.MetaCryptoStatsKey: "not json"},
+	}, nil)
+	s3Mock.EXPECT().HeadObject(gomock.Any(), &s3.HeadObjectInput{Bucket: aws.String("bucket"), Key: aws.String("urn:uuid:2-1")}).Return(&s3.HeadObjectOutput{
+		ContentLength: aws.Int64(1), ContentType: aws.String("application/json"), LastModified: &when,
+		Metadata: map[string]string{store.MetaCryptoStatsKey: "{}"},
+	}, nil)
+
+	svc, err := service.New(store.New(store.Config{Bucket: "bucket"}, s3Mock, nil), service.Config{})
+	require.NoError(t, err)
+
+	res, err := svc.Search(context.Background(), when.Unix()-1, 0)
+	require.NoError(t, err)
+	require.Len(t, res, 2)
+	require.Nil(t, res[0].CryptoStats)
+	require.Equal(t, []string{service.WarningCryptoStatsInvalid}, res[0].Warnings)
+	require.NotNil(t, res[1].CryptoStats)
+	require.Empty(t, res[1].Warnings)
+}

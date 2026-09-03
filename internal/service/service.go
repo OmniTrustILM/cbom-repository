@@ -27,6 +27,25 @@ var (
 	ErrNotFound      = errors.New("not found")
 )
 
+// Warning codes attached to search and versions entries whose statistics could not be
+// read from object metadata. The entry is still returned — a document the consumer
+// cannot see is worse than one flagged — with `cryptoStats` set to null.
+const (
+	// WarningCryptoStatsMissing: the object carries no crypto-stats metadata.
+	WarningCryptoStatsMissing = "crypto-stats-missing"
+	// WarningCryptoStatsInvalid: the crypto-stats metadata value is not valid JSON.
+	WarningCryptoStatsInvalid = "crypto-stats-invalid"
+)
+
+// MaxSearchLimit is the largest page size GET /v1/bom accepts for `limit`. Each
+// returned entry costs one HEAD request, so the cap bounds a single call's HEAD
+// fan-out to roughly `limit` — the never-split-a-second rule (see searchPaged) can
+// grow the page slightly past `limit` to finish the boundary second, but no further.
+// The cap does not bound the LIST side: store.Search still lists the whole bucket on
+// every call regardless of `limit`. Requests above the cap are rejected rather than
+// clamped, so a consumer's "fewer than limit entries → last page" rule stays valid.
+const MaxSearchLimit = 1000
+
 //go:embed schemas
 var schemas embed.FS
 
@@ -171,27 +190,35 @@ func (s Service) VersionSupported(version string) bool {
 }
 
 type SearchRes struct {
-	SerialNumber string      `json:"serialNumber"`
-	Version      string      `json:"version"`
-	Timestamp    string      `json:"created_at"`
-	CryptoStats  CryptoStats `json:"cryptoStats"`
+	SerialNumber string `json:"serialNumber"`
+	Version      string `json:"version"`
+	Timestamp    string `json:"created_at"`
+	// CryptoStats is null when the statistics could not be read; Warnings then says why.
+	CryptoStats *CryptoStats `json:"cryptoStats"`
+	// Warnings lists WarningCryptoStats* codes. Omitted when empty so that entries with
+	// valid statistics keep the legacy wire format byte for byte.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
-// Search retrieves all BOMs with a last modified timestamp greater than the specified value.
-// The function queries the underlying store for matching BOMs and enriches each result with
-// cryptographic asset statistics extracted from object metadata.
+// Search retrieves BOMs with a last modified timestamp greater than the specified value
+// and enriches each result with cryptographic asset statistics extracted from object
+// metadata. Objects whose statistics are missing or unreadable are returned with null
+// statistics and a warning code.
+//
+// limit <= 0 selects the legacy, unpaged behaviour: every matching object, in listing
+// order, LastModified compared at full precision. limit > 0 selects paged mode, see
+// searchPaged for the exact semantics.
 //
 // Parameters:
 //   - ctx: Context for cancellation, deadlines, and additional slog fields.
 //   - ts: Unix timestamp (seconds since epoch); only BOMs modified after this time are returned
+//   - limit: page size for paged mode (the handler enforces 1..MaxSearchLimit), or <= 0 for legacy mode
 //
 // Returns:
 //   - []SearchRes: Slice of search results containing serial number, version, timestamp, and crypto statistics
-//   - error: Non-nil if the store query fails, key format is invalid, or JSON unmarshaling fails
-func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
-	res := []SearchRes{}
-
-	ctx = log.ContextAttrs(ctx, slog.Int64("timestamp", ts))
+//   - error: Non-nil if the store query fails or (legacy mode) a key does not follow the naming invariant
+func (s Service) Search(ctx context.Context, ts int64, limit int) ([]SearchRes, error) {
+	ctx = log.ContextAttrs(ctx, slog.Int64("timestamp", ts), slog.Int("limit", limit))
 	slog.DebugContext(ctx, "Calling `store.Search()`.")
 
 	r, err := s.store.Search(ctx, ts)
@@ -201,51 +228,178 @@ func (s Service) Search(ctx context.Context, ts int64) ([]SearchRes, error) {
 
 	slog.DebugContext(ctx, "`store.Search()` finished.",
 		slog.Int("count", len(r)),
-		slog.String("value", strings.Join(r, ",")),
+		slog.String("value", strings.Join(objectKeys(r), ",")),
 	)
 
-	for _, cpy := range r {
-		idx := strings.LastIndex(cpy, "-")
-		if idx == -1 {
+	if limit <= 0 {
+		return s.searchLegacy(ctx, r)
+	}
+	return s.searchPaged(ctx, r, ts, limit)
+}
+
+// searchLegacy is the unpaged search: every listed object, in listing order, one HEAD
+// each. A key that violates the naming invariant fails the call, as it always has.
+func (s Service) searchLegacy(ctx context.Context, objects []store.ObjectInfo) ([]SearchRes, error) {
+	res := []SearchRes{}
+	for _, obj := range objects {
+		serialNumber, version, ok := splitObjectKey(obj.Key)
+		if !ok {
 			slog.ErrorContext(ctx, "Key does NOT adhere to the naming invariant.",
-				slog.String("key", cpy), slog.String("expected-format", "urn:uuid:<uuid>-<version>"))
+				slog.String("key", obj.Key), slog.String("expected-format", "urn:uuid:<uuid>-<version>"))
 			return nil, errors.New("unexpected key returned from store")
 		}
 
-		head, err := s.store.GetHeadObject(ctx, cpy)
-		switch {
-		case errors.Is(err, store.ErrNotFound):
-			slog.WarnContext(ctx, fmt.Sprintf("Fetching HeadObject for key %q failed although version was previously returned by `store.Search()`. Skipping from result set.", cpy))
-			continue
-
-		case err != nil:
+		entry, found, err := s.searchEntry(ctx, obj.Key, serialNumber, version)
+		if err != nil {
 			return nil, err
 		}
+		if !found {
+			continue
+		}
+		res = append(res, entry)
+	}
+	return res, nil
+}
 
-		cryptoStatsValue, ok := head.Metadata[store.MetaCryptoStatsKey]
+// pagedCandidates selects and orders the objects searchPaged consumes:
+//
+//  1. Only objects whose LastModified *second* is after ts are candidates — the same
+//     granularity as created_at, so MinIO's sub-second values cannot leak an object of
+//     the `after` second into the next page.
+//  2. Candidates are ordered by (LastModified, key); ties are impossible.
+func pagedCandidates(objects []store.ObjectInfo, ts int64) []store.ObjectInfo {
+	candidates := make([]store.ObjectInfo, 0, len(objects))
+	for _, obj := range objects {
+		if obj.LastModified.Unix() > ts {
+			candidates = append(candidates, obj)
+		}
+	}
+	slices.SortFunc(candidates, func(a, b store.ObjectInfo) int {
+		if c := a.LastModified.Compare(b.LastModified); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Key, b.Key)
+	})
+	return candidates
+}
+
+// searchPaged returns one page of the feed. The rules exist so that a consumer can
+// advance `after` to the last entry's created_at (whole seconds) without skipping
+// entries, on AWS S3 and MinIO alike:
+//
+//  1. Candidates come from pagedCandidates: second-granularity filter on ts, ordered
+//     by (LastModified, key).
+//  2. Once `limit` entries are collected, the page keeps growing only while the next
+//     candidate sits in the same second as the entry that filled the page ("never split
+//     a second"). Objects skipped because they vanished, or because their key does not
+//     follow the naming invariant, do not count.
+//  3. A page shorter than `limit` is the last one. Everything else (HEAD errors,
+//     warnings) behaves as in searchEntry.
+//  4. created_at is overwritten with the LIST LastModified (obj.LastModified) that
+//     decided the boundary above, instead of the HEAD LastModified searchEntry set it
+//     to. The boundary and created_at must come from the same clock: if HEAD reports a
+//     different second than LIST (an unguarded overwrite landing between LIST and HEAD
+//     — e.g. via uploadCaseSNValidVersionInvalid — or a store whose HTTP-date rounding
+//     differs from its listing precision), a consumer advancing `after` to the last
+//     created_at must never be able to outrun the boundary the next page is filtered
+//     against.
+func (s Service) searchPaged(ctx context.Context, objects []store.ObjectInfo, ts int64, limit int) ([]SearchRes, error) {
+	res := []SearchRes{}
+	var pageFull bool
+	var boundary int64 // second of the entry that filled the page; meaningful only while pageFull
+	for _, obj := range pagedCandidates(objects, ts) {
+		second := obj.LastModified.Unix()
+		if pageFull && second != boundary {
+			break
+		}
+
+		serialNumber, version, ok := splitObjectKey(obj.Key)
 		if !ok {
-			slog.WarnContext(ctx,
-				fmt.Sprintf("There is no key %q in object metadata. Skipping from result set.", store.MetaCryptoStatsKey),
-				slog.String("object-key", cpy))
+			slog.WarnContext(ctx, "Key does NOT adhere to the naming invariant. Skipping from paged result set.",
+				slog.String("key", obj.Key), slog.String("expected-format", "urn:uuid:<uuid>-<version>"))
 			continue
 		}
 
-		var cryptoStats CryptoStats
-		if err := json.Unmarshal([]byte(cryptoStatsValue), &cryptoStats); err != nil {
-			slog.ErrorContext(ctx,
-				fmt.Sprintf("Unmarshaling metadata key %q value failed.", store.MetaCryptoStatsKey),
-				slog.String("error", err.Error()), slog.String("object-key", cpy))
-			return res, errors.New("unmarshaling json failed")
+		entry, found, err := s.searchEntry(ctx, obj.Key, serialNumber, version)
+		if err != nil {
+			return nil, err
 		}
-
-		res = append(res, SearchRes{
-			SerialNumber: cpy[:idx],
-			Version:      cpy[idx+1:],
-			Timestamp:    head.LastModified.Format(time.RFC3339),
-			CryptoStats:  cryptoStats,
-		})
+		if !found {
+			continue
+		}
+		// The boundary above is computed from the LIST LastModified (obj.LastModified);
+		// created_at must come from that same clock, not from searchEntry's HEAD
+		// LastModified, so a consumer advancing `after` by created_at can never outrun
+		// the boundary the next page is filtered against.
+		entry.Timestamp = obj.LastModified.UTC().Format(time.RFC3339)
+		res = append(res, entry)
+		if len(res) >= limit {
+			pageFull = true
+			boundary = second
+		}
 	}
 	return res, nil
+}
+
+// searchEntry builds the search entry for one listed object from its HEAD metadata.
+// found is false when the object vanished between LIST and HEAD; the caller skips it.
+func (s Service) searchEntry(ctx context.Context, key, serialNumber, version string) (SearchRes, bool, error) {
+	head, err := s.store.GetHeadObject(ctx, key)
+	switch {
+	case errors.Is(err, store.ErrNotFound):
+		slog.WarnContext(ctx, fmt.Sprintf("Fetching HeadObject for key %q failed although version was previously returned by `store.Search()`. Skipping from result set.", key))
+		return SearchRes{}, false, nil
+
+	case err != nil:
+		return SearchRes{}, false, err
+	}
+
+	cryptoStats, warnings := statsFromMetadata(ctx, key, head.Metadata)
+	return SearchRes{
+		SerialNumber: serialNumber,
+		Version:      version,
+		Timestamp:    head.LastModified.Format(time.RFC3339),
+		CryptoStats:  cryptoStats,
+		Warnings:     warnings,
+	}, true, nil
+}
+
+// statsFromMetadata reads the crypto statistics stored in object metadata. When the key
+// is missing or its value is not valid JSON it returns nil statistics and the matching
+// warning code, so callers surface the object instead of dropping it or failing the call.
+func statsFromMetadata(ctx context.Context, key string, metadata map[string]string) (*CryptoStats, []string) {
+	raw, ok := metadata[store.MetaCryptoStatsKey]
+	if !ok {
+		slog.WarnContext(ctx, fmt.Sprintf("There is no key %q in object metadata. Returning the entry with a warning.", store.MetaCryptoStatsKey),
+			slog.String("object-key", key))
+		return nil, []string{WarningCryptoStatsMissing}
+	}
+
+	var cryptoStats CryptoStats
+	if err := json.Unmarshal([]byte(raw), &cryptoStats); err != nil {
+		slog.ErrorContext(ctx, fmt.Sprintf("Unmarshaling metadata key %q value failed. Returning the entry with a warning.", store.MetaCryptoStatsKey),
+			slog.String("error", err.Error()), slog.String("object-key", key))
+		return nil, []string{WarningCryptoStatsInvalid}
+	}
+	return &cryptoStats, nil
+}
+
+// splitObjectKey splits an object key `<urn>-<version>` at its last '-' into the serial
+// number (URN) and the version suffix (a decimal integer or "original").
+func splitObjectKey(key string) (serialNumber, version string, ok bool) {
+	idx := strings.LastIndex(key, "-")
+	if idx == -1 {
+		return "", "", false
+	}
+	return key[:idx], key[idx+1:], true
+}
+
+func objectKeys(objects []store.ObjectInfo) []string {
+	keys := make([]string, 0, len(objects))
+	for _, obj := range objects {
+		keys = append(keys, obj.Key)
+	}
+	return keys
 }
 
 // GetBOMByUrn retrieves a BOM document by its URN and version.
@@ -320,9 +474,11 @@ func (s Service) GetBOMByUrn(ctx context.Context, urn, version string) ([]byte, 
 }
 
 type VersionRes struct {
-	Version     string      `json:"version"`
-	Timestamp   string      `json:"created_at"`
-	CryptoStats CryptoStats `json:"cryptoStats"`
+	Version   string `json:"version"`
+	Timestamp string `json:"created_at"`
+	// CryptoStats is null when the statistics could not be read; Warnings then says why.
+	CryptoStats *CryptoStats `json:"cryptoStats"`
+	Warnings    []string     `json:"warnings,omitempty"`
 }
 
 // UrnVersions retrieves all available versions of a BOM identified by its URN.
@@ -331,8 +487,8 @@ type VersionRes struct {
 //
 // The returned slice includes all numbered versions (e.g., "1", "2", "3") and
 // may also include an "original" version if one exists in the store. Versions
-// that exist in the store but are missing required metadata (such as crypto
-// statistics) are logged as warnings and excluded from the results.
+// whose crypto statistics are missing or unreadable are returned with null
+// statistics and a warning code.
 //
 // Parameters:
 //   - ctx: Context for cancellation, deadlines, and additional slog fields
@@ -341,7 +497,7 @@ type VersionRes struct {
 // Returns:
 //   - []VersionRes: Slice of versions, some metadata and crypto statistics
 //   - error: Returns ErrNotFound if the URN doesn't exist, or other errors
-//     from the store or JSON unmarshaling
+//     from the store
 func (s Service) UrnVersions(ctx context.Context, urn string) ([]VersionRes, error) {
 	ctx = log.ContextAttrs(ctx,
 		slog.String("urn", urn),
@@ -378,23 +534,13 @@ func (s Service) UrnVersions(ctx context.Context, urn string) ([]VersionRes, err
 			return nil, err
 		}
 
-		cryptoStats, ok := head.Metadata[store.MetaCryptoStatsKey]
-		if !ok {
-			slog.WarnContext(ctx, fmt.Sprintf("There is no key %q in object metadata. Skipping from result set.", store.MetaCryptoStatsKey),
-				slog.String("object-key", key))
-			continue
-		}
-
-		item := VersionRes{
-			Version:   cpy,
-			Timestamp: head.LastModified.Format(time.RFC3339),
-		}
-		if err := json.Unmarshal([]byte(cryptoStats), &item.CryptoStats); err != nil {
-			slog.ErrorContext(ctx, fmt.Sprintf("Unmarshaling value of metadata key %q failed.", store.MetaCryptoStatsKey),
-				slog.String("error", err.Error()), slog.String("object-key", key))
-			return res, errors.New("unmarshaling json failed")
-		}
-		res = append(res, item)
+		cryptoStats, warnings := statsFromMetadata(ctx, key, head.Metadata)
+		res = append(res, VersionRes{
+			Version:     cpy,
+			Timestamp:   head.LastModified.Format(time.RFC3339),
+			CryptoStats: cryptoStats,
+			Warnings:    warnings,
+		})
 	}
 	return res, nil
 }
