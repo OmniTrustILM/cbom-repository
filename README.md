@@ -64,7 +64,7 @@ Upon successful upload, the endpoint returns basic cryptographic statistics abou
 
 The statistics count every component of type `cryptographic-asset` in the whole `components` tree — nested components included — by `cryptoProperties.assetType`. `metadata.component`, `metadata.tools`, `formulation` and `services` are not counted, matching the platform's asset inventory.
 
-Each stored object carries S3 user metadata: `version` (the document version or `original`), `crypto-stats` (the statistics as JSON) and `crypto-stats-version` (`2` for the tree count; absent on objects stored before nested components were counted, which hold a shallow count of the top-level array).
+Each stored object carries S3 user metadata: `version` (the document version or `original`), `crypto-stats` (the statistics as JSON), `crypto-stats-version` (`2` for the tree count; absent on objects stored before nested components were counted, which hold a shallow count of the top-level array) and, only when the walk hit the 1000-level depth bound, `crypto-stats-truncated: true`. The paged search surfaces the last two as the `crypto-stats-shallow` and `crypto-stats-truncated` warnings.
 
 This feature is still a work in progress, and both the format and the details reported may evolve over time.
 
@@ -76,14 +76,15 @@ Each entry carries `serialNumber`, `version` (a decimal integer or `original`), 
 
 #### Paging with `limit`
 
-Without `limit` the call behaves exactly as before: every matching entry, in object-store listing order.
+Without `limit` the call behaves exactly as before: every matching entry, in object-store listing order; objects without statistics metadata are skipped, an object with unreadable statistics metadata fails the call, and no `warnings` field is ever emitted. Existing consumers see byte-identical responses.
 
 With `limit` (1..1000) the call returns one page:
 
 * entries are ordered by the store's `LastModified` at its native precision, then by object key;
 * `created_at` is derived from the same listing timestamp that orders the page, so advancing `after` by it is always safe;
 * the comparison with `after` is done in whole seconds, matching the precision of `created_at`;
-* while more entries remain, a page holds at least `limit` entries and is then extended with every further entry sharing the last entry's second — a page never splits a second, so advancing `after` by whole seconds cannot skip anything;
+* while more entries remain, a page holds at least `limit` entries and is then extended with every further entry sharing the last entry's second — a page never splits a second, so advancing `after` by whole seconds cannot skip anything. The page size is therefore `max(limit, entries in that second)`; `limit` bounds the `HEAD` fan-out only while seconds are sparse, and a burst of uploads stamped into one second comes back as one page (a hard limit arrives with the keyset cursor, issue #144);
+* objects whose key does not follow the `<urn>-<version>` naming (only possible for objects written to the bucket outside this API) are skipped with a warning in the service log: a key with no `-` at all also fails the legacy call, while a key whose version suffix is not a positive integer or `original` is returned as-is by the legacy call;
 * a page shorter than `limit` (including an empty page) is the last one;
 * values above 1000 are rejected with `400` rather than clamped, so the termination rule above stays valid.
 
@@ -100,18 +101,23 @@ loop:
 watermark = unix(run_start) - overlap  # overlap >= clock skew + longest upload duration + 1 s; Core uses 60 s
 ```
 
-Within a run, advancing `after` by the last `created_at` is safe because a page never splits a second. Between runs the watermark must go back to the *start* of the previous run, not to the last `created_at`: an upload that completed while the run was already past its second — the still-open second, or a multipart upload, which S3 stamps with its **initiation** time — is only picked up by a run that starts behind it. The overlap therefore has to cover clock skew plus the longest upload you expect. Duplicates across runs are expected and deduplication is the consumer's job (Core deduplicates on `(serialNumber, version)` and already uses "job start − 60 s").
+Within a run, advancing `after` by the last `created_at` is safe because a page never splits a second: every object that was listable when its page was built is yielded exactly once, and an object overwritten during the run (its `LastModified` moves) is yielded again under its new stamp — at-least-once, exactly-once for objects not modified during the run. Between runs the watermark must go back to the *start* of the previous run, not to the last `created_at`: an upload that completed while the run was already past its second — the still-open second, or a multipart upload, which S3 stamps with its **initiation** time — is only picked up by a run that starts behind it. The overlap therefore has to cover clock skew plus the longest upload you expect. Duplicates across runs are expected and deduplication is the consumer's job (Core deduplicates on `(serialNumber, version)` and already uses "job start − 60 s").
 
 Every call lists the whole bucket — an object store cannot filter by time — so paging bounds the per-call `HEAD` fan-out and response size, not the listing cost. The design decision on a real change feed (cursor, sequence or webhook) is in [docs/design/2026-09-02-change-feed-decision.md](./docs/design/2026-09-02-change-feed-decision.md).
 
-#### Warnings
+#### Warnings (paged mode only)
 
-A stored object whose statistics metadata is missing or unreadable is no longer dropped from the listing. Its entry has `"cryptoStats": null` and a `warnings` array with one of:
+With `limit`, a stored object whose statistics metadata is missing or unreadable is no longer dropped from the listing. Its entry has `"cryptoStats": null` and a `warnings` array with one of:
 
 * `crypto-stats-missing` — the object carries no statistics metadata;
 * `crypto-stats-invalid` — the statistics metadata is not valid JSON.
 
-The document itself is retrievable as usual. The same applies to `GET /v1/bom/{urn}/versions`.
+Two further codes can accompany valid statistics:
+
+* `crypto-stats-shallow` — the object was stored before nested components were counted (no `crypto-stats-version` metadata), so its counts cover the top-level `components` array only;
+* `crypto-stats-truncated` — the document nests deeper than 1000 levels and the counts stop there (`crypto-stats-truncated` metadata).
+
+The document itself is retrievable as usual. The legacy call (no `limit`) and `GET /v1/bom/{urn}/versions` keep their original behaviour and never emit `warnings`; consumers get the flagged entries by adopting `limit`.
 
 ### GET /v1/bom/{urn} (Get by URN)
 
@@ -130,7 +136,7 @@ To retrieve a specific version instead of the latest, you may provide the option
 ?version=<number>
 ```
 
-`version` may also be the literal `original` to fetch the unmodified upload.
+`version` may also be the literal `original` to fetch the unmodified upload. Any other non-empty value (`0`, `01`, `foo`) is rejected with `400`; an empty or whitespace-only value is treated as omitted (latest version).
 
 ## Full list of environment variables
 
