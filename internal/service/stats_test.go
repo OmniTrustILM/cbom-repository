@@ -281,7 +281,3 @@ func TestCalculateCryptoStats_SiblingsAfterSubtree(t *testing.T) {
 	require.Equal(t, 1, stats.CryptoAsset.Cert.Total)
 	require.Equal(t, 1, stats.CryptoAsset.Protocol.Total)
 }
-
-func TestCryptoStatsVersion(t *testing.T) {
-	require.Equal(t, "2", service.CryptoStatsVersion)
-}

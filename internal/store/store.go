@@ -30,6 +30,10 @@ const (
 	// under MetaCryptoStatsKey (see service.CryptoStatsVersion). Objects uploaded
 	// before the key existed carry no value and hold the legacy shallow count.
 	MetaCryptoStatsVersionKey = "crypto-stats-version"
+	// MetaCryptoStatsTruncatedKey is set to "true" when the component walk that
+	// produced MetaCryptoStatsKey stopped at its depth bound, so the counts are a
+	// lower bound rather than the whole document. The key is absent otherwise.
+	MetaCryptoStatsTruncatedKey = "crypto-stats-truncated"
 )
 
 type S3Contract interface {
@@ -64,6 +68,9 @@ type Metadata struct {
 	CryptoStats string
 	// CryptoStatsVersion is written under MetaCryptoStatsVersionKey when non-empty.
 	CryptoStatsVersion string
+	// CryptoStatsTruncated is written under MetaCryptoStatsTruncatedKey, as "true",
+	// only when set; a complete count leaves the key out entirely.
+	CryptoStatsTruncated bool
 }
 
 func (m Metadata) Map() map[string]string {
@@ -73,6 +80,9 @@ func (m Metadata) Map() map[string]string {
 	}
 	if m.CryptoStatsVersion != "" {
 		res[MetaCryptoStatsVersionKey] = m.CryptoStatsVersion
+	}
+	if m.CryptoStatsTruncated {
+		res[MetaCryptoStatsTruncatedKey] = "true"
 	}
 	return res
 }

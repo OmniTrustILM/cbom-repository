@@ -25,4 +25,19 @@ func TestMetadata_Map(t *testing.T) {
 			store.MetaCryptoStatsKey: "{}",
 		}, m.Map())
 	})
+
+	t.Run("truncated statistics are marked", func(t *testing.T) {
+		m := store.Metadata{Version: "1", CryptoStats: "{}", CryptoStatsVersion: "2", CryptoStatsTruncated: true}
+		require.Equal(t, map[string]string{
+			store.MetaVersionKey:              "1",
+			store.MetaCryptoStatsKey:          "{}",
+			store.MetaCryptoStatsVersionKey:   "2",
+			store.MetaCryptoStatsTruncatedKey: "true",
+		}, m.Map())
+	})
+
+	t.Run("a complete count carries no truncation marker", func(t *testing.T) {
+		m := store.Metadata{Version: "1", CryptoStats: "{}", CryptoStatsVersion: "2"}
+		require.NotContains(t, m.Map(), store.MetaCryptoStatsTruncatedKey)
+	})
 }
