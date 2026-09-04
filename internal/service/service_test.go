@@ -331,43 +331,12 @@ func TestSearch_LegacyEntryJSONIsByteCompatible(t *testing.T) {
 	require.Equal(t, want, buf.String())
 }
 
-// An object without crypto-stats metadata is returned — visible, with a warning and
-// null statistics — instead of being silently dropped from the feed.
-func TestSearch_MissingStatsMetadataIsVisibleWithWarning(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	when := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
-	s3Mock := mockS3.NewMockS3Contract(ctrl)
-	s3Mock.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
-		Contents: []types.Object{{Key: awsString("urn:uuid:1-1"), LastModified: &when}},
-	}, nil)
-	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return(&s3.HeadObjectOutput{
-		ContentLength: aws.Int64(1), ContentType: aws.String("application/json"), LastModified: &when,
-		Metadata: map[string]string{store.MetaVersionKey: "1"},
-	}, nil)
-
-	svc, err := service.New(store.New(store.Config{Bucket: "bucket"}, s3Mock, nil), service.Config{})
-	require.NoError(t, err)
-
-	res, err := svc.Search(context.Background(), when.Unix()-1, 0)
-	require.NoError(t, err)
-	require.Equal(t, []service.SearchRes{{
-		SerialNumber: "urn:uuid:1",
-		Version:      "1",
-		Timestamp:    "2024-01-01T12:00:00Z",
-		CryptoStats:  nil,
-		Warnings:     []string{service.WarningCryptoStatsMissing},
-	}}, res)
-
-	var buf bytes.Buffer
-	require.NoError(t, json.NewEncoder(&buf).Encode(res))
-	require.Equal(t, `[{"serialNumber":"urn:uuid:1","version":"1","created_at":"2024-01-01T12:00:00Z","cryptoStats":null,"warnings":["crypto-stats-missing"]}]`+"\n", buf.String())
-}
-
-// Corrupt crypto-stats metadata on one object must not take the whole feed down with a
-// 500; the object is returned with a warning and the other entries are unaffected.
-func TestSearch_InvalidStatsMetadataIsVisibleWithWarning(t *testing.T) {
+// Legacy mode (no `limit`) is exactly main's behaviour: an object without crypto-stats
+// metadata is skipped, with a warning in the log, and the call still succeeds. The
+// legacy caller (Core) NPE-skips a null `cryptoStats` at DEBUG and moves its watermark
+// past the entry, so surfacing such an object as a warning entry would turn a loud skip
+// into a silent permanent miss. Warnings exist in paged mode only.
+func TestSearch_LegacyMissingStatsIsSkipped(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -381,7 +350,7 @@ func TestSearch_InvalidStatsMetadataIsVisibleWithWarning(t *testing.T) {
 	}, nil)
 	s3Mock.EXPECT().HeadObject(gomock.Any(), &s3.HeadObjectInput{Bucket: aws.String("bucket"), Key: aws.String("urn:uuid:1-1")}).Return(&s3.HeadObjectOutput{
 		ContentLength: aws.Int64(1), ContentType: aws.String("application/json"), LastModified: &when,
-		Metadata: map[string]string{store.MetaCryptoStatsKey: "not json"},
+		Metadata: map[string]string{store.MetaVersionKey: "1"},
 	}, nil)
 	s3Mock.EXPECT().HeadObject(gomock.Any(), &s3.HeadObjectInput{Bucket: aws.String("bucket"), Key: aws.String("urn:uuid:2-1")}).Return(&s3.HeadObjectOutput{
 		ContentLength: aws.Int64(1), ContentType: aws.String("application/json"), LastModified: &when,
@@ -393,9 +362,60 @@ func TestSearch_InvalidStatsMetadataIsVisibleWithWarning(t *testing.T) {
 
 	res, err := svc.Search(context.Background(), when.Unix()-1, 0)
 	require.NoError(t, err)
-	require.Len(t, res, 2)
-	require.Nil(t, res[0].CryptoStats)
-	require.Equal(t, []string{service.WarningCryptoStatsInvalid}, res[0].Warnings)
-	require.NotNil(t, res[1].CryptoStats)
-	require.Empty(t, res[1].Warnings)
+	require.Len(t, res, 1, "the object without statistics is skipped, the other one is returned")
+	require.Equal(t, "urn:uuid:2", res[0].SerialNumber)
+	require.Empty(t, res[0].Warnings, "legacy mode never sets warnings")
+
+	var buf bytes.Buffer
+	require.NoError(t, json.NewEncoder(&buf).Encode(res))
+	require.Equal(t, `[{"serialNumber":"urn:uuid:2","version":"1","created_at":"2024-01-01T12:00:00Z","cryptoStats":{"cryptoAssets":{"total":0,"algorithms":{"total":0},"certificates":{"total":0},"protocols":{"total":0},"relatedCryptoMaterials":{"total":0}}}}]`+"\n", buf.String())
+}
+
+// Legacy mode fails the call on unparseable statistics, as main did: the caller gets an
+// error it can retry rather than an entry whose statistics silently read as null.
+func TestSearch_LegacyInvalidStatsFailsCall(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	when := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Mock.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+		Contents: []types.Object{{Key: awsString("urn:uuid:1-1"), LastModified: &when}},
+	}, nil)
+	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return(&s3.HeadObjectOutput{
+		ContentLength: aws.Int64(1), ContentType: aws.String("application/json"), LastModified: &when,
+		Metadata: map[string]string{store.MetaCryptoStatsKey: "not json"},
+	}, nil)
+
+	svc, err := service.New(store.New(store.Config{Bucket: "bucket"}, s3Mock, nil), service.Config{})
+	require.NoError(t, err)
+
+	_, err = svc.Search(context.Background(), when.Unix()-1, 0)
+	require.EqualError(t, err, "unmarshaling json failed")
+}
+
+// created_at comes from the HEAD Last-Modified header. A store that answers HEAD without
+// one (aws.ToTime then yields the zero time) must not produce a year-1 created_at: the
+// LIST timestamp of the same object is used instead, truncated to RFC 3339 seconds.
+func TestSearch_LegacyCreatedAtFallsBackToListingClock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	when := time.Date(2024, 1, 1, 12, 0, 0, 500*int(time.Millisecond), time.UTC)
+	s3Mock := mockS3.NewMockS3Contract(ctrl)
+	s3Mock.EXPECT().ListObjectsV2(gomock.Any(), gomock.Any(), gomock.Any()).Return(&s3.ListObjectsV2Output{
+		Contents: []types.Object{{Key: awsString("urn:uuid:1-1"), LastModified: &when}},
+	}, nil)
+	s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return(&s3.HeadObjectOutput{
+		ContentLength: aws.Int64(1), ContentType: aws.String("application/json"), LastModified: nil,
+		Metadata: map[string]string{store.MetaCryptoStatsKey: "{}"},
+	}, nil)
+
+	svc, err := service.New(store.New(store.Config{Bucket: "bucket"}, s3Mock, nil), service.Config{})
+	require.NoError(t, err)
+
+	res, err := svc.Search(context.Background(), when.Unix()-1, 0)
+	require.NoError(t, err)
+	require.Len(t, res, 1)
+	require.Equal(t, "2024-01-01T12:00:00Z", res[0].Timestamp)
 }

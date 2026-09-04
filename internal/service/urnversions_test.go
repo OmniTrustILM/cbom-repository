@@ -68,17 +68,17 @@ func TestService_UrnVersions(t *testing.T) {
 				{
 					Version:     "1",
 					Timestamp:   testTime.Format(time.RFC3339),
-					CryptoStats: &cryptoStats,
+					CryptoStats: cryptoStats,
 				},
 				{
 					Version:     "2",
 					Timestamp:   testTime.Format(time.RFC3339),
-					CryptoStats: &cryptoStats,
+					CryptoStats: cryptoStats,
 				},
 				{
 					Version:     "original",
 					Timestamp:   testTime.Format(time.RFC3339),
-					CryptoStats: &cryptoStats,
+					CryptoStats: cryptoStats,
 				},
 			},
 			wantErr: nil,
@@ -111,12 +111,12 @@ func TestService_UrnVersions(t *testing.T) {
 				{
 					Version:     "1",
 					Timestamp:   testTime.Format(time.RFC3339),
-					CryptoStats: &cryptoStats,
+					CryptoStats: cryptoStats,
 				},
 				{
 					Version:     "2",
 					Timestamp:   testTime.Format(time.RFC3339),
-					CryptoStats: &cryptoStats,
+					CryptoStats: cryptoStats,
 				},
 			},
 			wantErr: nil,
@@ -176,7 +176,7 @@ func TestService_UrnVersions(t *testing.T) {
 				{
 					Version:     "2",
 					Timestamp:   testTime.Format(time.RFC3339),
-					CryptoStats: &cryptoStats,
+					CryptoStats: cryptoStats,
 				},
 			},
 			wantErr: nil,
@@ -202,7 +202,7 @@ func TestService_UrnVersions(t *testing.T) {
 			wantErr: errors.New("`s3.HeadObject()` failed"),
 		},
 		{
-			name: "missing crypto stats metadata - version is returned with a warning",
+			name: "missing crypto stats metadata - skip version",
 			urn:  validUrn,
 			setupMock: func(m *mockS3.MockS3Contract) {
 				m.EXPECT().
@@ -237,8 +237,11 @@ func TestService_UrnVersions(t *testing.T) {
 				)
 			},
 			want: []service.VersionRes{
-				{Version: "1", Timestamp: testTime.Format(time.RFC3339), CryptoStats: nil, Warnings: []string{service.WarningCryptoStatsMissing}},
-				{Version: "2", Timestamp: testTime.Format(time.RFC3339), CryptoStats: &cryptoStats},
+				{
+					Version:     "2",
+					Timestamp:   testTime.Format(time.RFC3339),
+					CryptoStats: cryptoStats,
+				},
 			},
 			wantErr: nil,
 		},
@@ -265,10 +268,8 @@ func TestService_UrnVersions(t *testing.T) {
 						},
 					}, nil)
 			},
-			want: []service.VersionRes{
-				{Version: "1", Timestamp: testTime.Format(time.RFC3339), CryptoStats: nil, Warnings: []string{service.WarningCryptoStatsInvalid}},
-			},
-			wantErr: nil,
+			want:    []service.VersionRes{},
+			wantErr: errors.New("unmarshaling json failed"),
 		},
 		{
 			name: "empty versions list",

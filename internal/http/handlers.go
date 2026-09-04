@@ -79,7 +79,17 @@ func (s Server) GetByURN(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// An absent `version` means "latest", and so does an empty or all-whitespace one —
+	// GetBOMByUrn has always read `strings.TrimSpace(version) == ""` that way, so a
+	// caller relying on it must keep being served. Anything else must be a version this
+	// service could have stored (service.ValidVersion): the value goes straight into the
+	// S3 object key, so a foreign one can only produce a 404 that a client cannot tell
+	// apart from a BOM that existed and was deleted.
 	version := r.URL.Query().Get("version")
+	if strings.TrimSpace(version) != "" && !service.ValidVersion(version) {
+		badrequest(w, "Request validation failed, query parameter 'version' must be a positive integer or 'original'.")
+		return
+	}
 
 	slog.InfoContext(ctx, "Start.", slog.String("urn", urn), slog.String("version", version))
 
@@ -153,7 +163,9 @@ func (h Server) Search(w http.ResponseWriter, r *http.Request) {
 
 	i, err := strconv.ParseInt(after, 10, 64)
 	if err != nil || i < 0 {
-		badrequest(w, "Request validation failed, query parameter 'after' must be a positive integer (unixtime).")
+		// Zero is accepted: `after` is a watermark, and 0 (the epoch) legitimately
+		// means "everything". Only a negative value or a non-integer is rejected.
+		badrequest(w, "Request validation failed, query parameter 'after' must be a non-negative integer (unixtime).")
 		return
 	}
 

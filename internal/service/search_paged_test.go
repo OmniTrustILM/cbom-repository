@@ -85,8 +85,19 @@ func assertEveryObjectYielded(t *testing.T, s3 *fakeS3, entries []service.Search
 	}
 }
 
+// assertNoEntryAtOrBefore fails the test if any entry's created_at second is at or
+// before `ts`. Applied to a later run, it proves that run could not have delivered the
+// objects of those seconds — which is what gives a union assertion across two runs its
+// teeth: without it, a run whose `after` predates every object trivially covers them.
+func assertNoEntryAtOrBefore(t *testing.T, entries []service.SearchRes, ts int64) {
+	t.Helper()
+	for _, e := range entries {
+		require.Greater(t, createdAtUnix(t, e), ts, "%s cannot come from a run started at %d", entryID(e), ts)
+	}
+}
+
 // injectLateUploads returns a fakeS3.beforeListing hook that, for listings 2 through 5,
-// seeds three more objects landing between +30s and +45s of base — simulating uploads
+// seeds three more objects landing between +30s and +44s of base — simulating uploads
 // that complete while a run is already in progress.
 func injectLateUploads(s3 *fakeS3, rng *rand.Rand, base time.Time) func(listing int) {
 	return func(listing int) {
@@ -122,12 +133,17 @@ func TestSearch_Paged_ProtocolWithConcurrentUploads(t *testing.T) {
 	add(8, 3*time.Second, "s03")
 	add(8, 10*time.Second, "s10")
 
-	// Listing 1 builds page 1 (boundary second +0). Before listing 2 two uploads land:
-	// one late into the boundary second (+0.9 s) and one into a later second (+7 s).
+	// Two uploads land while the run is in progress. Before listing 2, one into a second
+	// still ahead of the cursor (+7 s) — the run will see it. Before listing 4, one into
+	// second +3, which page 3 has just finished (a multipart upload initiated at +3.9 s
+	// that completed after page 3 was built): its second is behind the cursor by then, so
+	// this run can never see it — only the next run, thanks to the overlap.
 	s3.beforeListing = func(listing int) {
-		if listing == 2 {
-			s3.putWithStats("urn:uuid:late-boundary-1", base.Add(900*time.Millisecond))
+		switch listing {
+		case 2:
 			s3.putWithStats("urn:uuid:late-later-1", base.Add(7*time.Second))
+		case 4:
+			s3.putWithStats("urn:uuid:late-boundary-1", base.Add(3900*time.Millisecond))
 		}
 	}
 	svc := newSvc(t, s3)
@@ -136,7 +152,10 @@ func TestSearch_Paged_ProtocolWithConcurrentUploads(t *testing.T) {
 	// page 1: limit hit at the 4th object of second +0 → the second is completed → 5
 	// page 2: 3 (+1) + 1 (+2) = 4; next candidate is +3 → stop at exactly 4
 	// page 3: second +3 has 8 → 8
-	// page 4: late-later (+7) + 3 of +10 reach the limit → second +10 completed → 9
+	// page 4: late-later (+7) + 3 of +10 reach the limit → second +10 completed → 9;
+	//         late-boundary, injected just before this listing, sits in second +3 and
+	//         the cursor is already at +3, so it is not a candidate and the sizes are
+	//         the same as they would be without it
 	// page 5: empty → done
 	require.Equal(t, []int{5, 4, 8, 9, 0}, sizes)
 
@@ -162,13 +181,58 @@ func TestSearch_Paged_ProtocolWithConcurrentUploads(t *testing.T) {
 	require.Equal(t, 0, idSet(naive)["urn:uuid:late-boundary-1"], "advancing from the last created_at loses uploads that landed behind the cursor")
 
 	// The documented rule: the next run starts from (run start − overlap). Run 1
-	// conceptually started at base+10.5 s (after every seeded object existed); the late
-	// upload is a multipart upload initiated at +0.9 s that completed during the run, so
-	// the overlap must cover the longest upload duration — Core's 60 s does.
+	// conceptually started at base+10.5 s (after every seeded object existed) and the
+	// overlap must cover the longest upload duration — 8 s here, so run 2 starts from
+	// `after` = base+2 and picks the late upload up.
+	//
+	// That `after` sits in the middle of the data on purpose: run 2 cannot see anything
+	// in seconds +0..+2, so the union assertion below only holds if run 1 really
+	// delivered those objects.
 	runStart := base.Add(10500 * time.Millisecond)
-	run2, _ := iterate(t, svc, runStart.Unix()-60, 4)
+	run2, _ := iterate(t, svc, runStart.Unix()-8, 4)
 	require.Equal(t, 1, idSet(run2)["urn:uuid:late-boundary-1"])
+	assertNoEntryAtOrBefore(t, run2, base.Add(2*time.Second).Unix())
 	assertEveryObjectYielded(t, s3, append(run1, run2...))
+}
+
+// An object overwritten in place while a run is in progress moves to a new second and is
+// yielded again under that stamp — at-least-once delivery, never a skip. The run must
+// still terminate: the object is delivered under each stamp exactly once, not chased
+// forever.
+func TestSearch_Paged_OverwriteDuringRunYieldsTwice(t *testing.T) {
+	base := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	s3 := newFakeS3(1000)
+	for i, key := range []string{"urn:uuid:a-1", "urn:uuid:b-1", "urn:uuid:c-1", "urn:uuid:d-1"} {
+		s3.putWithStats(key, base.Add(time.Duration(i+1)*time.Second))
+	}
+	// Page 1 yields `a` at +1 and the cursor moves to +1. Before listing 2, `a` is
+	// overwritten and its LIST and HEAD clocks both move to +5 — ahead of the cursor,
+	// so the same object becomes a candidate again.
+	s3.beforeListing = func(listing int) {
+		if listing == 2 {
+			s3.overwrite("urn:uuid:a-1", base.Add(5*time.Second))
+		}
+	}
+	svc := newSvc(t, s3)
+
+	run, sizes := iterate(t, svc, base.Unix(), 1)
+	require.Equal(t, []int{1, 1, 1, 1, 1, 0}, sizes, "one entry per page, then an empty page ends the run")
+
+	seen := idSet(run)
+	require.Equal(t, 2, seen["urn:uuid:a-1"], "the overwritten object is yielded once per stamp")
+	for _, id := range []string{"urn:uuid:b-1", "urn:uuid:c-1", "urn:uuid:d-1"} {
+		require.Equal(t, 1, seen[id], "%s must be yielded exactly once", id)
+	}
+	assertEveryObjectYielded(t, s3, run)
+
+	var stamps []int64
+	for _, e := range run {
+		if entryID(e) == "urn:uuid:a-1" {
+			stamps = append(stamps, createdAtUnix(t, e))
+		}
+	}
+	require.Equal(t, []int64{base.Add(1 * time.Second).Unix(), base.Add(5 * time.Second).Unix()}, stamps,
+		"once under the stamp it had when the run started, once under the stamp of the overwrite")
 }
 
 // Randomised: many same-second objects, random limit, uploads injected during the
@@ -192,10 +256,13 @@ func TestSearch_Paged_AtLeastOnceRandomised(t *testing.T) {
 			assertExactlyOnce(t, run1)
 			s3.beforeListing = nil
 			// Run 1 conceptually started right after the seeded objects existed (base+40 s);
-			// the injected uploads have LastModified between +30 s and +45 s, so an overlap
-			// of 60 s from the run start covers all of them.
+			// the injected uploads have LastModified between +30 s and +44 s, so an overlap
+			// of 20 s from the run start covers all of them — and leaves run 2 blind to
+			// everything at or before +20 s, so the union assertion below can only pass if
+			// run 1 delivered those objects itself.
 			runStart := base.Add(40 * time.Second)
-			run2, _ := iterate(t, svc, runStart.Unix()-60, limit)
+			run2, _ := iterate(t, svc, runStart.Unix()-20, limit)
+			assertNoEntryAtOrBefore(t, run2, base.Add(20*time.Second).Unix())
 			assertEveryObjectYielded(t, s3, append(run1, run2...))
 		})
 	}
@@ -338,6 +405,121 @@ func TestSearch_Paged_CreatedAtFollowsListingClock(t *testing.T) {
 	require.Equal(t, base.Add(1*time.Second).Unix(), createdAtUnix(t, run[0]), "created_at must follow the LIST second, not HEAD's")
 }
 
-func TestMaxSearchLimit(t *testing.T) {
-	require.Equal(t, 1000, service.MaxSearchLimit)
+// Paged mode is where warnings live: an object whose statistics cannot be read stays
+// visible (with `cryptoStats` null and a code saying why), and an object whose
+// statistics are readable but were counted shallowly or cut short by the depth bound is
+// flagged without hiding the numbers. Codes come in a fixed order: missing|invalid
+// first, then shallow, then truncated.
+func TestSearch_Paged_StatsWarnings(t *testing.T) {
+	base := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	cases := map[string]struct {
+		metadata     map[string]string
+		wantStats    bool
+		wantWarnings []string
+	}{
+		"valid and versioned has no warnings": {
+			metadata:  map[string]string{"version": "1", "crypto-stats": validStatsJSON, "crypto-stats-version": "2"},
+			wantStats: true,
+		},
+		"missing statistics": {
+			metadata:     map[string]string{"version": "1"},
+			wantWarnings: []string{service.WarningCryptoStatsMissing},
+		},
+		"invalid statistics": {
+			metadata:     map[string]string{"version": "1", "crypto-stats": "not json"},
+			wantWarnings: []string{service.WarningCryptoStatsInvalid},
+		},
+		"valid statistics without a version key are a legacy shallow count": {
+			metadata:     map[string]string{"version": "1", "crypto-stats": validStatsJSON},
+			wantStats:    true,
+			wantWarnings: []string{service.WarningCryptoStatsShallow},
+		},
+		"the depth bound fired at upload": {
+			metadata:     map[string]string{"version": "1", "crypto-stats": validStatsJSON, "crypto-stats-version": "2", "crypto-stats-truncated": "true"},
+			wantStats:    true,
+			wantWarnings: []string{service.WarningCryptoStatsTruncated},
+		},
+		"shallow and truncated are reported in that order": {
+			metadata:     map[string]string{"version": "1", "crypto-stats": validStatsJSON, "crypto-stats-truncated": "true"},
+			wantStats:    true,
+			wantWarnings: []string{service.WarningCryptoStatsShallow, service.WarningCryptoStatsTruncated},
+		},
+		"a truncated marker other than true is not a warning": {
+			metadata:     map[string]string{"version": "1", "crypto-stats": validStatsJSON, "crypto-stats-version": "2", "crypto-stats-truncated": "false"},
+			wantStats:    true,
+			wantWarnings: nil,
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			s3 := newFakeS3(1000)
+			s3.put("urn:uuid:a-1", base.Add(1*time.Second), tc.metadata)
+			svc := newSvc(t, s3)
+
+			res, err := svc.Search(context.Background(), base.Unix(), 10)
+			require.NoError(t, err)
+			require.Len(t, res, 1, "an object is never dropped from a page because of its statistics")
+			require.Equal(t, tc.wantWarnings, res[0].Warnings)
+			if tc.wantStats {
+				require.NotNil(t, res[0].CryptoStats)
+				require.Equal(t, 1, res[0].CryptoStats.CryptoAsset.Total)
+				return
+			}
+			require.Nil(t, res[0].CryptoStats)
+		})
+	}
+}
+
+// One object with unreadable statistics must not cost the page its other entries, and
+// must not fail the call the way legacy mode does.
+func TestSearch_Paged_UnreadableStatsDoNotAffectOtherEntries(t *testing.T) {
+	base := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	s3 := newFakeS3(1000)
+	s3.put("urn:uuid:a-1", base.Add(1*time.Second), map[string]string{"version": "1", "crypto-stats": "not json"})
+	s3.putWithStats("urn:uuid:b-1", base.Add(2*time.Second))
+	svc := newSvc(t, s3)
+
+	res, err := svc.Search(context.Background(), base.Unix(), 10)
+	require.NoError(t, err)
+	require.Len(t, res, 2)
+	require.Nil(t, res[0].CryptoStats)
+	require.Equal(t, []string{service.WarningCryptoStatsInvalid}, res[0].Warnings)
+	require.NotNil(t, res[1].CryptoStats)
+	require.Empty(t, res[1].Warnings)
+}
+
+// A key whose version suffix is neither a positive integer nor "original" is not a BOM
+// version this service wrote. Paged mode skips it with a warning — the same treatment as
+// a key without a '-' — so a consumer's page never carries an entry it cannot fetch.
+// Legacy mode keeps returning such keys, byte for byte as before.
+func TestSearch_Paged_SkipsInvalidVersionSuffix(t *testing.T) {
+	base := time.Date(2026, 9, 2, 10, 0, 0, 0, time.UTC)
+	s3 := newFakeS3(1000)
+	s3.putWithStats("urn:uuid:x-foo", base.Add(1*time.Second))
+	s3.putWithStats("urn:uuid:x-0", base.Add(2*time.Second))
+	s3.putWithStats("urn:uuid:x-01", base.Add(3*time.Second))
+	s3.putWithStats("urn:uuid:a-1", base.Add(4*time.Second))
+	s3.putWithStats("urn:uuid:b-original", base.Add(5*time.Second))
+	svc := newSvc(t, s3)
+
+	paged, err := svc.Search(context.Background(), base.Unix(), 10)
+	require.NoError(t, err)
+	ids := make([]string, 0, len(paged))
+	for _, e := range paged {
+		ids = append(ids, entryID(e))
+	}
+	require.Equal(t, []string{"urn:uuid:a-1", "urn:uuid:b-original"}, ids)
+
+	legacy, err := svc.Search(context.Background(), base.Unix(), 0)
+	require.NoError(t, err)
+	require.Len(t, legacy, 5, "legacy mode returns every key with a '-', whatever its suffix")
+}
+
+func TestValidVersion(t *testing.T) {
+	for _, valid := range []string{"1", "2", "10", "999999", "original"} {
+		require.True(t, service.ValidVersion(valid), valid)
+	}
+	for _, invalid := range []string{"", "0", "01", "-1", "1.0", "1 ", " 1", "foo", "Original", "original-1", "1e3", "١"} {
+		require.False(t, service.ValidVersion(invalid), invalid)
+	}
 }

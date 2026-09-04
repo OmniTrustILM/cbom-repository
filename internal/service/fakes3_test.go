@@ -52,8 +52,28 @@ func (f *fakeS3) put(key string, lastModified time.Time, metadata map[string]str
 	f.objects[key] = fakeObject{lastModified: lastModified, metadata: metadata}
 }
 
+// validStatsJSON is the crypto-stats metadata value of a healthy object: one algorithm
+// asset, counted by the current (nested) walk.
+const validStatsJSON = `{"cryptoAssets":{"total":1,"algorithms":{"total":1},"certificates":{"total":0},"protocols":{"total":0},"relatedCryptoMaterials":{"total":0}}}`
+
+// putWithStats stores an object the way an upload does today: valid statistics stamped
+// with the counting-algorithm version, so paged search reports no warnings for it.
 func (f *fakeS3) putWithStats(key string, lastModified time.Time) {
-	f.put(key, lastModified, map[string]string{"version": "1", "crypto-stats": `{"cryptoAssets":{"total":1,"algorithms":{"total":1},"certificates":{"total":0},"protocols":{"total":0},"relatedCryptoMaterials":{"total":0}}}`})
+	f.put(key, lastModified, map[string]string{"version": "1", "crypto-stats": validStatsJSON, "crypto-stats-version": "2"})
+}
+
+// overwrite replaces the stored object's lastModified and keeps its metadata: the LIST
+// and HEAD clocks move together, as they do when a key is overwritten in place while a
+// run is in progress.
+func (f *fakeS3) overwrite(key string, lastModified time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	obj, ok := f.objects[key]
+	if !ok {
+		panic("fakeS3.overwrite: no such key " + key)
+	}
+	obj.lastModified = lastModified
+	f.objects[key] = obj
 }
 
 func (f *fakeS3) sortedKeys(prefix string) []string {
