@@ -1,7 +1,7 @@
 ########################
 # Build Stage
 ########################
-FROM golang:1.26.8-alpine3.24 AS builder
+FROM golang:1.27.1-alpine3.24 AS builder
 
 ARG VERSION=dev
 ENV CGO_ENABLED=0 \
@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 ########################
 # Run Stage
 ########################
-FROM alpine:3.24.1
+FROM alpine:3.24.2
 
 # Pull the latest security fixes for the base packages (e.g. libcrypto3/libssl3;
 # CVE-2026-22184 and CVE-2026-14456 arrived this way). BuildKit caches this layer by
