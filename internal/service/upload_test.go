@@ -234,6 +234,35 @@ func TestUploadBOM_Success_MissingSerialGeneratesAndStores(t *testing.T) {
 	require.Equal(t, 1, res.Version)
 }
 
+// metadata.timestamp is optional in CycloneDX (1.6 and 1.7)
+// document whose metadata object omits it must be accepted
+func TestUploadBOM_Success_MetadataWithoutTimestamp(t *testing.T) {
+	for _, version := range []string{"1.6", "1.7"} {
+		t.Run(version, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			s3Mock := mockS3.NewMockS3Contract(ctrl)
+			s3Manager := mockS3.NewMockS3Manager(ctrl)
+
+			st := store.New(store.Config{Bucket: "bucket"}, s3Mock, s3Manager)
+			svc, err := New(st, Config{CheckOnFetch: false})
+			require.NoError(t, err)
+
+			// HeadObject returns NotFound -> no key exists
+			s3Mock.EXPECT().HeadObject(gomock.Any(), gomock.Any()).Return((*s3.HeadObjectOutput)(nil), &types.NotFound{}).AnyTimes()
+			// original + normalised copy
+			s3Manager.EXPECT().UploadObject(gomock.Any(), gomock.Any()).Return(&manager.UploadObjectOutput{}, nil).Times(2)
+
+			body := fmt.Sprintf(`{"bomFormat":"CycloneDX","specVersion":%q,"metadata":{"component":{"type":"application","name":"app"}}}`, version)
+			res, err := svc.UploadBOM(context.Background(), io.NopCloser(strings.NewReader(body)), version)
+			require.NoError(t, err)
+			require.NotEmpty(t, res.SerialNumber)
+			require.Equal(t, 1, res.Version)
+		})
+	}
+}
+
 func TestUploadBOM_Conflict_AlreadyExists(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
