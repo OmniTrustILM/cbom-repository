@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'deploy/charts/**'
+      - '.github/workflows/test_chart.yaml'
     branches: [ main ]
   workflow_dispatch:
 
@@ -20,42 +21,41 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Helm
-        uses: azure/setup-helm@v5
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5
         with:
-          version: v4.2.3
+          version: v4.3.0
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: '3.14'
           check-latest: true
 
       - name: Set up chart-testing
-        uses: helm/chart-testing-action@v2.8.0
+        uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
 
+      # The workflow runs only for chart or workflow changes (or by hand). When no chart
+      # changed, the run was triggered by the tooling, so test every chart against it.
       - name: Detect Changed Charts
         id: list-changed
         run: |
           changed=$(ct list-changed --target-branch main --chart-dirs deploy/charts)
           echo "${changed}"
-          
+
           if [[ -n "$changed" ]]; then
             echo "✅ Charts changed"
-            echo "changed=true" >> $GITHUB_ENV
-
-            echo "changed_charts<<EOF" >> $GITHUB_ENV
-            echo "$changed" >> $GITHUB_ENV
-            echo "EOF" >> $GITHUB_ENV
+            echo "all_charts=false" >> $GITHUB_ENV
           else
-            echo "ℹ️ No chart changes detected"
-            echo "changed=false" >> $GITHUB_ENV
+            echo "ℹ️ No chart changes detected — testing all charts against the changed tooling"
+            changed=$(find deploy/charts -mindepth 1 -maxdepth 1 -type d)
+            echo "all_charts=true" >> $GITHUB_ENV
           fi
 
-      - name: Skip testing when no charts changed
-        if: env.changed != 'true'
-        run: echo "No chart changes detected — skipping install tests." && exit 0
+          echo "changed_charts<<EOF" >> $GITHUB_ENV
+          echo "$changed" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Check for Development Versions (Non-release PRs)
-        if: env.changed == 'true' && !startsWith(github.head_ref, 'release')
+        if: env.all_charts != 'true' && !startsWith(github.head_ref, 'release')
         env:
           changed_charts: ${{ env.changed_charts }}
         run: |
@@ -69,7 +69,7 @@ jobs:
           done
 
       - name: Check for Non-Develop Versions (Release PRs)
-        if: env.changed == 'true' && startsWith(github.head_ref, 'release')
+        if: env.all_charts != 'true' && startsWith(github.head_ref, 'release')
         env:
           changed_charts: ${{ env.changed_charts }}
         run: |
@@ -83,18 +83,14 @@ jobs:
           done
 
       - name: Run chart-testing (lint)
-        if: env.changed == 'true'
-        run: ct lint --target-branch main --chart-dirs deploy/charts --check-version-increment=false
+        run: ct lint --target-branch main --chart-dirs deploy/charts --check-version-increment=false ${{ env.all_charts == 'true' && '--all' || '' }}
 
       - name: Create kind cluster
-        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
-        if: env.changed == 'true'
+        uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
 
       - name: Create testing namespace
-        if: env.changed == 'true'
         run: kubectl create namespace chart-testing
 
       - name: Run chart-testing (install)
-        if: env.changed == 'true'
         run: |
-          ct install --namespace chart-testing --target-branch main --chart-dirs deploy/charts
+          ct install --namespace chart-testing --target-branch main --chart-dirs deploy/charts ${{ env.all_charts == 'true' && '--all' || '' }}
