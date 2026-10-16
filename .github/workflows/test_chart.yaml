@@ -36,9 +36,11 @@ jobs:
 
       - name: Test credential Secret references
         run: |
-          python -m pip install -r tests/helm/requirements.txt
+          test_venv="$RUNNER_TEMP/cbom-chart-tests"
+          python -m venv "$test_venv"
+          "$test_venv/bin/python" -m pip install --require-hashes --only-binary=:all: -r tests/helm/requirements.txt
           helm dependency build deploy/charts/cbom-repository --skip-refresh
-          python -B -m unittest discover -s tests/helm -p 'test_*.py' -v
+          "$test_venv/bin/python" -B -m unittest discover -s tests/helm -p 'test_*.py' -v
 
       # The workflow runs only for chart or workflow changes (or by hand). When no chart
       # changed, the run was triggered by the tooling, so test every chart against it.
