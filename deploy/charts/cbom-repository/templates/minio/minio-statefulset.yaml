@@ -57,7 +57,7 @@ spec:
           {{- end }}
           envFrom:
             - secretRef:
-                name: minio-secret
+                name: {{ .Values.minio.existingSecret | default "minio-secret" | quote }}
           {{- if $additionalEnvFrom }}
             {{- $additionalEnvFrom | nindent 12 }}
           {{- end }}
