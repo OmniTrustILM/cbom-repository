@@ -120,10 +120,12 @@ The following values may be configured:
 | cbomRepo.region                              | `eu-west-1`                 | Region for CBOM S3 storage                                            |
 | cbomRepo.bucket                              | `cbom-repo`                 | Bucket name for CBOM S3 storage                                       |
 | cbomRepo.usePathStyle                        | `true`                      | Use path style for S3 storage access                                  |
+| cbomRepo.existingSecret                      | `""`                        | Existing Secret containing `access_key` and `secret_key`; skips generated CBOM credentials |
 | cbomRepo.accessKey                           | `minioadmin`                | Access key for CBOM S3 storage                                        |
 | cbomRepo.secretKey                           | `minioadmin`                | Secret key for CBOM S3 storage                                        |
 | cbomRepo.corsAllowedOrigins                  | `""`                        | Origin of the ILM web console, e.g. `https://ilm.example.net` (§CORS) |
 | minio.enabled                                | `false`                     | Enable/disable embedded MinIO server                                  |
+| minio.existingSecret                          | `""`                        | Existing Secret containing the MinIO environment; skips generated MinIO credentials |
 
 ##### CORS (`cbomRepo.corsAllowedOrigins`)
 
@@ -158,6 +160,40 @@ Two related requirements:
   name both can reach.
 - This service has no authentication of its own, so every listed origin gets full
   read **and upload** access. `*` allows any origin and is for development only.
+
+#### Existing credential Secrets
+
+Create the referenced Secrets in the release namespace before starting the
+workloads. The chart does not create or manage them:
+
+```yaml
+cbomRepo:
+  existingSecret: cbom-s3-credentials
+minio:
+  enabled: true
+  existingSecret: minio-environment
+```
+
+Use names different from `cbom-repository-secret` and `minio-secret`, respectively.
+Reusing a generated name is rejected because Helm would otherwise delete the
+previously chart-managed Secret when it disappears from the release manifest.
+
+`cbomRepo.existingSecret` requires `access_key` and `secret_key`. Both the CBOM
+container and the bucket initialization container use these keys.
+`cbomRepo.accessKey` and `cbomRepo.secretKey` are ignored and may be omitted.
+
+`minio.existingSecret` supplies the complete MinIO environment through `envFrom`.
+It requires `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`. Include `MINIO_BROWSER`
+with `on` or `off`; when using the console, also include
+`MINIO_BROWSER_REDIRECT_URL`. These supplied settings replace the generated
+browser settings; `minio.console.enabled` still controls the console port and
+server argument. `minio.rootUser`, `minio.rootPassword` and
+`minio.console.redirectUrl` are ignored. Disabling MinIO still omits all MinIO
+resources and the bucket initialization container.
+
+The two references are independent. An empty reference retains that component's
+generated Secret and existing literal-value behavior. When using embedded
+MinIO, ensure the CBOM credentials can access the configured bucket.
 
 #### Customization parameters
 

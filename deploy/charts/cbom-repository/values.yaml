@@ -207,6 +207,8 @@ cbomRepo:
   region: "eu-west-1"
   bucket: "cbom-repo"
   usePathStyle: true
+  # Use access_key/secret_key from this Secret instead of generating credentials.
+  existingSecret: ""
   accessKey: "minioadmin"
   secretKey: "minioadmin"
   # Browser origins allowed full read and upload access cross-origin.
@@ -230,6 +232,8 @@ cbomRepo:
 
 minio:
   enabled: false
+  # Includes MINIO_ROOT_USER, MINIO_ROOT_PASSWORD and the MinIO browser settings.
+  existingSecret: ""
 
   image:
     # minio is discontinued, pending an S3-compatible alternative (see #121)
