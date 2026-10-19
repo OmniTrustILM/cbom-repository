@@ -42,6 +42,7 @@ artifacts
 ut_coverage.out
 coverage.out
 golangci-lint-report.xml
+.scannerwork/
 
 # Downloaded chart dependencies
 **/charts/*.tgz
@@ -52,3 +53,7 @@ golangci-lint-report.xml
 
 # Compiled binary (produced by `go build ./cmd/cbom-repository`)
 /cbom-repository
+
+### Local working documents ###
+docs/superpowers/
+.superpowers/
