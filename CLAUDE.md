@@ -50,7 +50,8 @@ The org Trivy policy blocks vulnerabilities only in tag builds. On pull requests
 ## CI checks
 
 - **Check PR** (`check_pr.yml`): golangci-lint, `go mod verify`, build, vet and `go test -race` with coverage.
-- **SonarCloud** (project `ilm_cbom-repository`): after Check PR succeeds, `dispatch-sonar.yml` starts `sonar.yml` from the base branch, so changes to `sonar.yml` take effect only after merge. Issues and measures are readable without a token through the public API, e.g. `https://sonarcloud.io/api/issues/search?componentKeys=ilm_cbom-repository`.
+- **SonarCloud** (project `ilm_cbom-repository`): after Check PR succeeds, `dispatch-sonar.yml` starts `sonar.yml` from the default branch, and `sonar.yml` reads `sonar-project.properties` from the base branch, so changes to either take effect only after merge. Issues and measures are readable without a token through the public API, e.g. `https://sonarcloud.io/api/issues/search?componentKeys=ilm_cbom-repository`.
+- **Sonar Main** (`sonar_push.yml`): analyzes `main` on every push, which keeps the SonarCloud main branch, the baseline for pull request analysis, current.
 - **CodeQL** (`codeql.yml`): Go and GitHub Actions analysis.
 - **Test Docker image** (`test_docker_image.yaml`): builds the image and runs the Trivy scan, where vulnerabilities only warn.
 - **Test Chart** (`test_chart.yaml`): runs for changes to the chart, `tests/helm` or the workflow itself, with the Python chart tests, `ct lint` and `ct install` on kind.
