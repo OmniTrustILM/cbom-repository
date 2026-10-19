@@ -5,6 +5,10 @@ on:
       - 'deploy/charts/**'
     branches: [main]
 
+concurrency:
+  group: pr-${{ github.event.pull_request.number || github.ref }}-build-pr
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
