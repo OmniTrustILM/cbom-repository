@@ -7,6 +7,7 @@ on:
 permissions:
   actions: write # download artifact + create workflow dispatch
   contents: read
+  pull-requests: read # compare the artifact's commit with the current PR head
 
 jobs:
   dispatch:
@@ -64,6 +65,18 @@ jobs:
           RUN_ID: ${{ steps.ctx.outputs.run_id }}
         with:
           script: |
+            // A dispatch for a superseded commit would cancel the newer commit's
+            // analysis through the Sonar concurrency group, so only the current
+            // PR head is dispatched.
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: Number(process.env.PR_NUMBER),
+            });
+            if (pr.head.sha !== process.env.HEAD_SHA) {
+              core.notice(`Skipping Sonar for ${process.env.HEAD_SHA}: the pull request head is now ${pr.head.sha}.`);
+              return;
+            }
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
               repo: context.repo.repo,
