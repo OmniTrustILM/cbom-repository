@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 ########################
 # Run Stage
 ########################
-FROM alpine:3.24.2
+FROM alpine:3.24.3
 
 # Pull the latest security fixes for the base packages (e.g. libcrypto3/libssl3;
 # CVE-2026-22184 and CVE-2026-14456 arrived this way). BuildKit caches this layer by
